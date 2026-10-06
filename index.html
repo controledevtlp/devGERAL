@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visão Gerencial — TRJ · TMG · TNE</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <style>
+    :root {
+      --navy:   #0D1B2A;
+      --navy2:  #0E1F30;
+      --navy3:  #14253A;
+      --navy4:  #1A2535;
+      --border: #1E3A56;
+      --text:   #F0F4F8;
+      --muted:  #7A9BBF;
+      --dim:    #3A5570;
+      --orange: #FF6B00;
+      --red:    #E74C3C;
+      --yellow: #F39C12;
+      --blue:   #3498DB;
+      --green:  #2ECC71;
+      --trj:    #FF6B00;
+      --tmg:    #3498DB;
+      --tne:    #2ECC71;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--navy);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .gh {
+      background: var(--navy4);
+      border-bottom: 2px solid var(--border);
+      padding: 20px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .gh-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .gh-badge {
+      background: var(--orange);
+      color: #0D1B2A;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .gh-title { font-size: 18px; font-weight: 700; color: var(--text); }
+    .gh-sub   { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 1px; }
+    .gh-right { display: flex; align-items: center; gap: 14px; }
+    .gh-ts { font-size: 12px; color: var(--dim); }
+    .gh-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 16px;
+      transition: all .15s;
+      letter-spacing: .5px;
+    }
+    .gh-btn:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ── MAIN ── */
+    .gm { padding: 28px 36px; display: flex; flex-direction: column; gap: 28px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── SECTION LABEL ── */
+    .g-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .g-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── CONTRACT STRIPS (header por contrato) ── */
+    .g-strips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .g-strip {
+      background: var(--navy3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-left-width: 4px;
+    }
+    .g-strip-name { font-size: 22px; font-weight: 900; letter-spacing: 2px; }
+    .g-strip-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .g-strip-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .g-strip-ts   { font-size: 11px; color: var(--dim); text-align: right; }
+
+    /* ── DONUT ROW ── */
+    .g-donuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .g-donut-card {
+      background: var(--navy3);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .g-donut-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+    .g-donut-wrap  { position: relative; width: 180px; height: 180px; }
+    .g-donut-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .g-donut-pct  { font-size: 34px; font-weight: 900; line-height: 1; }
+    .g-donut-sub  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .g-donut-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .g-donut-kpi {
+      background: var(--navy2);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .g-donut-kpi-val  { font-size: 20px; font-weight: 900; line-height: 1; }
+    .g-donut-kpi-lbl  { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 3px; }
+
+    /* ── CHART CARDS ── */
+    .g-chart-card {
+      background: var(--navy3);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 22px 18px;
+    }
+    .g-chart-head {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    /* ── 2-COL LAYOUT ── */
+    .g-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* ── SKELETON ── */
+    .g-skel {
+      background: linear-gradient(90deg, var(--navy3) 25%, var(--navy4) 50%, var(--navy3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 8px;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .g-donuts, .g-strips { grid-template-columns: 1fr; }
+      .g-2col { grid-template-columns: 1fr; }
+      .gm { padding: 16px; }
+      .gh  { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="gh">
+  <div class="gh-logo">
+    <span class="gh-badge">Gerencial</span>
+    <div>
+      <div class="gh-title">Visão Comparativa de Contratos</div>
+      <div class="gh-sub">TRJ · TMG · TNE &nbsp;—&nbsp; Dados em tempo real</div>
+    </div>
+  </div>
+  <div class="gh-right">
+    <span class="gh-ts" id="tsEl">—</span>
+    <button class="gh-btn" onclick="loadAll()">&#x21bb; Atualizar</button>
+  </div>
+</header>
+
+<main class="gm">
+
+  <!-- CONTRACT STRIPS -->
+  <div>
+    <div class="g-label">Contratos Ativos</div>
+    <div class="g-strips" id="strips"></div>
+  </div>
+
+  <!-- SLA DONUTS -->
+  <div>
+    <div class="g-label">SLA Geral — % das Concluídas dentro do Prazo</div>
+    <div class="g-donuts" id="donutsRow"></div>
+  </div>
+
+  <!-- BACKLOG BREAKDOWN (full width stacked bar) -->
+  <div class="g-chart-card">
+    <div class="g-chart-head">Composição do Backlog por Contrato</div>
+    <canvas id="chartBacklog" height="90"></canvas>
+  </div>
+
+  <!-- 2 COLS: Concluídas + Backlog Total -->
+  <div class="g-2col">
+    <div class="g-chart-card">
+      <div class="g-chart-head">Atividades Concluídas (total no histórico)</div>
+      <canvas id="chartConcluidas" height="140"></canvas>
+    </div>
+    <div class="g-chart-card">
+      <div class="g-chart-head">Fora do SLA × Preditiva × Indefinido</div>
+      <canvas id="chartUrgencia" height="140"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── CONTRACTS CONFIG ─────────────────────────────────────── */
+  var C = [
+    {
+      id: 'trj', name: 'TRJ', label: 'Rio de Janeiro',
+      sub: '5 regiões · RJ + ES',
+      color: '#FF6B00', colorAlpha: 'rgba(255,107,0,',
+      url: 'https://script.google.com/macros/s/AKfycbxu2uWr0zWK9ozBJ9a8_d95j6_SDeSJTZPtm3R8zinn_ZFZBNYK6FcHT6SNilN16VOZ/exec',
+      dash: 'https://controledevtlp.github.io/devTRJ/dashboard-publico.html'
+    },
+    {
+      id: 'tmg', name: 'TMG', label: 'Minas Gerais',
+      sub: '8 ANFs · ANF31–ANF38',
+      color: '#3498DB', colorAlpha: 'rgba(52,152,219,',
+      url: 'https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec',
+      dash: null
+    },
+    {
+      id: 'tne', name: 'TNE', label: 'Nordeste',
+      sub: '8 estados · PE/PB/CE/RN/PI/SE/AL/BA',
+      color: '#2ECC71', colorAlpha: 'rgba(46,204,113,',
+      url: 'https://script.google.com/macros/s/AKfycbwSPcNv-9o5xNf__chQquuhIGJyn2ff4BNYb8iPCnS2rOq2GClb3sfRrY2_j9JX8mgoOA/exec',
+      dash: null
+    }
+  ];
+
+  /* ── STATE ────────────────────────────────────────────────── */
+  var ST = {};
+  C.forEach(function (c) { ST[c.id] = { loading: true, kpis: null, savedAt: null, error: null }; });
+
+  var charts = {};
+
+  /* ── COMPUTE KPIS ─────────────────────────────────────────── */
+  function computeKpis(tasks) {
+    if (!Array.isArray(tasks) || !tasks.length) {
+      return { backlogTotal:0, foraSla:0, backlogIndef:0, preditiva:0, dentroBl:0, produtividade:0, slaGeral:0 };
+    }
+    var backlog = [], completed = [];
+    tasks.forEach(function (t) {
+      var fim    = (t.fimCalc || '').toString().trim();
+      var motivo = (t.motivoCancelamento || '').toString().trim();
+      if (fim) completed.push(t);
+      else if (!motivo) backlog.push(t);
+    });
+    var foraSla   = backlog.filter(function(t){ return t.statusSla === 'FORA DO SLA'; }).length;
+    var preditiva = backlog.filter(function(t){ return t.statusSla === 'PREDITIVA';   }).length;
+    var dentroBl  = backlog.filter(function(t){ return t.statusSla === 'DENTRO DO SLA'; }).length;
+    var indef     = backlog.filter(function(t){
+      var s = (t.statusSla||'').trim();
+      return !s || (s !== 'FORA DO SLA' && s !== 'DENTRO DO SLA' && s !== 'PREDITIVA');
+    }).length;
+    var compDentro = completed.filter(function(t){ return t.statusSla === 'DENTRO DO SLA'; }).length;
+    var slaGeral = completed.length > 0 ? Math.round(compDentro/completed.length*1000)/10 : 0;
+    return {
+      backlogTotal: backlog.length,
+      foraSla: foraSla,
+      backlogIndef: indef,
+      preditiva: preditiva,
+      dentroBl: dentroBl,
+      produtividade: completed.length,
+      slaGeral: slaGeral
+    };
+  }
+
+  /* ── FETCH ────────────────────────────────────────────────── */
+  function fetchOne(c) {
+    ST[c.id].loading = true;
+    render();
+    fetch(c.url + '?action=getDashboardSnapshot&_t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(res){
+        if (!res.ok) throw new Error(res.error || 'Resposta inválida');
+        var tasks = (res.data && res.data.tasksEnriched) ? res.data.tasksEnriched : [];
+        ST[c.id] = { loading: false, kpis: computeKpis(tasks), savedAt: res.savedAt || null, error: null };
+        render();
+      })
+      .catch(function(err){
+        ST[c.id] = { loading: false, kpis: null, savedAt: null, error: (err.message||'Erro') };
+        render();
+      });
+  }
+
+  function loadAll() { C.forEach(fetchOne); }
+
+  /* ── FORMAT ───────────────────────────────────────────────── */
+  function fmtN(n)  { return n == null ? 0 : n; }
+  function fmtPct(n){ return (n||0).toFixed(1)+'%'; }
+  function fmtDt(iso){
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+    catch(e){ return '—'; }
+  }
+
+  /* ── CHART DEFAULTS ───────────────────────────────────────── */
+  Chart.defaults.color       = '#7A9BBF';
+  Chart.defaults.borderColor = '#1E3A56';
+  Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+  /* ── DESTROY helper ── */
+  function destroyChart(id) {
+    if (charts[id]) { try { charts[id].destroy(); } catch(e){} charts[id] = null; }
+  }
+
+  /* ── RENDER ───────────────────────────────────────────────── */
+  function render() {
+    renderStrips();
+    var allReady = C.every(function(c){ return !ST[c.id].loading; });
+    if (!allReady) { renderSkeleton(); return; }
+    renderDonuts();
+    renderBacklogBar();
+    renderConcluidasBar();
+    renderUrgenciaBar();
+    renderTimestamp();
+  }
+
+  /* STRIPS */
+  function renderStrips() {
+    var el = document.getElementById('strips');
+    el.innerHTML = C.map(function(c){
+      var s = ST[c.id];
+      var online = !s.loading && !s.error;
+      var dotColor = s.loading ? '#F39C12' : (s.error ? '#E74C3C' : '#2ECC71');
+      return '<div class="g-strip" style="border-left-color:'+c.color+'">' +
+        '<div>' +
+          '<div class="g-strip-name" style="color:'+c.color+'">'+c.name+'</div>' +
+          '<div class="g-strip-sub">'+c.label+' · '+c.sub+'</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div class="g-strip-dot" style="background:'+dotColor+';box-shadow:0 0 6px '+dotColor+'80"></div>' +
+            '<span style="font-size:11px;color:'+dotColor+';font-weight:600">'+(s.loading?'Carregando':(s.error?'Offline':'Online'))+'</span>' +
+          '</div>' +
+          '<div class="g-strip-ts">'+fmtDt(s.savedAt)+'</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* SKELETON placeholder while loading */
+  function renderSkeleton() {
+    var donuts = document.getElementById('donutsRow');
+    if (!donuts.hasChildNodes()) {
+      donuts.innerHTML = C.map(function(){
+        return '<div class="g-donut-card"><div class="g-skel" style="width:180px;height:180px;border-radius:50%"></div></div>';
+      }).join('');
+    }
+  }
+
+  /* DONUTS — SLA Geral */
+  function renderDonuts() {
+    var el = document.getElementById('donutsRow');
+    el.innerHTML = '';
+    C.forEach(function(c){
+      var s = ST[c.id];
+      var K = s.kpis || { slaGeral:0, backlogTotal:0, produtividade:0, foraSla:0 };
+      var pct = K.slaGeral || 0;
+      var pctColor = pct >= 60 ? '#2ECC71' : (pct >= 35 ? '#F39C12' : '#E74C3C');
+
+      var wrap = document.createElement('div');
+      wrap.className = 'g-donut-card';
+      wrap.innerHTML =
+        '<div class="g-donut-title">'+c.name+' — SLA Geral</div>' +
+        '<div class="g-donut-wrap">' +
+          '<canvas id="donut_'+c.id+'" width="180" height="180"></canvas>' +
+          '<div class="g-donut-center">' +
+            '<div class="g-donut-pct" style="color:'+pctColor+'">'+pct.toFixed(1)+'%</div>' +
+            '<div class="g-donut-sub">dentro do prazo</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="g-donut-meta">' +
+          '<div class="g-donut-kpi">' +
+            '<div class="g-donut-kpi-val" style="color:'+c.color+'">'+fmtN(K.backlogTotal)+'</div>' +
+            '<div class="g-donut-kpi-lbl">Backlog</div>' +
+          '</div>' +
+          '<div class="g-donut-kpi">' +
+            '<div class="g-donut-kpi-val" style="color:#E74C3C">'+fmtN(K.foraSla)+'</div>' +
+            '<div class="g-donut-kpi-lbl">Fora SLA</div>' +
+          '</div>' +
+          '<div class="g-donut-kpi" style="grid-column:span 2">' +
+            '<div class="g-donut-kpi-val" style="color:#2ECC71">'+fmtN(K.produtividade)+'</div>' +
+            '<div class="g-donut-kpi-lbl">Concluídas</div>' +
+          '</div>' +
+        '</div>';
+      el.appendChild(wrap);
+
+      destroyChart('donut_'+c.id);
+      charts['donut_'+c.id] = new Chart(document.getElementById('donut_'+c.id), {
+        type: 'doughnut',
+        data: {
+          datasets: [{
+            data: [pct, 100 - pct],
+            backgroundColor: [c.color, '#1E3A56'],
+            hoverBackgroundColor: [c.color, '#1E3A56'],
+            borderWidth: 0,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          cutout: '72%',
+          animation: { animateRotate: true, duration: 900 },
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false },
+            datalabels: { display: false }
+          }
+        }
+      });
+    });
+  }
+
+  /* BACKLOG STACKED BAR */
+  function renderBacklogBar() {
+    destroyChart('backlog');
+    var K = C.map(function(c){ return ST[c.id].kpis || {}; });
+
+    charts['backlog'] = new Chart(document.getElementById('chartBacklog'), {
+      type: 'bar',
+      data: {
+        labels: C.map(function(c){ return c.name; }),
+        datasets: [
+          {
+            label: 'Fora do SLA',
+            data: K.map(function(k){ return fmtN(k.foraSla); }),
+            backgroundColor: 'rgba(231,76,60,.85)',
+            borderColor: '#E74C3C',
+            borderWidth: 1,
+            borderRadius: { topLeft:4, topRight:4 }
+          },
+          {
+            label: 'Preditiva',
+            data: K.map(function(k){ return fmtN(k.preditiva); }),
+            backgroundColor: 'rgba(52,152,219,.85)',
+            borderColor: '#3498DB',
+            borderWidth: 1
+          },
+          {
+            label: 'Indefinido (sem SLA)',
+            data: K.map(function(k){ return fmtN(k.backlogIndef); }),
+            backgroundColor: 'rgba(243,156,18,.85)',
+            borderColor: '#F39C12',
+            borderWidth: 1
+          },
+          {
+            label: 'Dentro do SLA',
+            data: K.map(function(k){ return fmtN(k.dentroBl); }),
+            backgroundColor: 'rgba(46,204,113,.85)',
+            borderColor: '#2ECC71',
+            borderWidth: 1,
+            borderRadius: { topLeft:4, topRight:4 }
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { font: { size: 13, weight: 'bold' }, color: '#7A9BBF' }
+          },
+          y: {
+            stacked: true,
+            grid: { color: 'rgba(30,58,86,.6)' },
+            ticks: { font: { size: 11 } }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: { boxWidth: 11, font: { size: 11 }, padding: 16, color: '#7A9BBF' }
+          },
+          datalabels: {
+            display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
+            color: '#0D1B2A',
+            font: { size: 11, weight: 'bold' },
+            formatter: function(v){ return v > 0 ? v : ''; }
+          }
+        }
+      }
+    });
+  }
+
+  /* CONCLUÍDAS — horizontal bar */
+  function renderConcluidasBar() {
+    destroyChart('concluidas');
+    var vals = C.map(function(c){ return fmtN((ST[c.id].kpis||{}).produtividade); });
+    var max  = Math.max.apply(null, vals);
+
+    charts['concluidas'] = new Chart(document.getElementById('chartConcluidas'), {
+      type: 'bar',
+      data: {
+        labels: C.map(function(c){ return c.name; }),
+        datasets: [{
+          label: 'Concluídas',
+          data: vals,
+          backgroundColor: C.map(function(c){ return c.colorAlpha+'0.8)'; }),
+          borderColor:     C.map(function(c){ return c.color; }),
+          borderWidth: 1,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          x: {
+            grid: { color: 'rgba(30,58,86,.5)' },
+            ticks: { font: { size: 11 } }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { size: 14, weight: 'bold' }, color: '#7A9BBF' }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            display: true,
+            anchor: 'end',
+            align: 'end',
+            color: '#F0F4F8',
+            font: { size: 13, weight: 'bold' },
+            formatter: function(v){ return v.toLocaleString('pt-BR'); },
+            padding: { left: 6 }
+          }
+        },
+        layout: { padding: { right: 40 } }
+      }
+    });
+  }
+
+  /* URGÊNCIA — grouped horizontal bar (Fora / Preditiva / Indef) */
+  function renderUrgenciaBar() {
+    destroyChart('urgencia');
+
+    charts['urgencia'] = new Chart(document.getElementById('chartUrgencia'), {
+      type: 'bar',
+      data: {
+        labels: C.map(function(c){ return c.name; }),
+        datasets: [
+          {
+            label: 'Fora do SLA',
+            data: C.map(function(c){ return fmtN((ST[c.id].kpis||{}).foraSla); }),
+            backgroundColor: 'rgba(231,76,60,.85)',
+            borderColor: '#E74C3C',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Preditiva',
+            data: C.map(function(c){ return fmtN((ST[c.id].kpis||{}).preditiva); }),
+            backgroundColor: 'rgba(52,152,219,.85)',
+            borderColor: '#3498DB',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Indefinido',
+            data: C.map(function(c){ return fmtN((ST[c.id].kpis||{}).backlogIndef); }),
+            backgroundColor: 'rgba(243,156,18,.85)',
+            borderColor: '#F39C12',
+            borderWidth: 1,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 13, weight: 'bold' }, color: '#7A9BBF' }
+          },
+          y: {
+            grid: { color: 'rgba(30,58,86,.5)' },
+            ticks: { font: { size: 11 } }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            align: 'end',
+            labels: { boxWidth: 11, font: { size: 11 }, padding: 12, color: '#7A9BBF' }
+          },
+          datalabels: {
+            display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
+            anchor: 'end',
+            align: 'end',
+            color: '#F0F4F8',
+            font: { size: 11, weight: 'bold' },
+            formatter: function(v){ return v > 0 ? v : ''; }
+          }
+        },
+        layout: { padding: { top: 16 } }
+      }
+    });
+  }
+
+  /* TIMESTAMP */
+  function renderTimestamp() {
+    document.getElementById('tsEl').textContent =
+      'Atualizado ' + new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+
+  /* ── BOOT ─────────────────────────────────────────────────── */
+  renderStrips();
+  renderSkeleton();
+  loadAll();
+
+})();
+</script>
+</body>
+</html>
