@@ -140,6 +140,15 @@
     }
     .g-filter-btn:hover { color: var(--fg); border-color: rgba(255,255,255,.3); }
 
+    /* Priority buttons inside donut cards */
+    .g-prio-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+    .g-prio-btn {
+      padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .8px;
+      border-radius: 12px; border: 1.5px solid rgba(255,255,255,.12); background: transparent;
+      color: var(--muted); cursor: pointer; transition: all .12s;
+    }
+    .g-prio-btn:hover { color: var(--fg); border-color: rgba(255,255,255,.3); }
+
     /* Contract strips */
     .g-strip {
       background: var(--card); border: 1px solid var(--border); border-left-width: 3px;
@@ -279,7 +288,7 @@
     <div class="g-sec"><span class="g-sec-dot"></span>Produtividade — Encerradas Dentro / Fora do SLA</div>
     <div class="g-card">
       <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Total de atividades concluídas por situação de SLA</div>
-      <div class="g-cbox" style="height:110px;"><canvas id="chartProd"></canvas></div>
+      <div class="g-cbox" style="height:150px;"><canvas id="chartProd"></canvas></div>
     </div>
   </div>
 
@@ -292,7 +301,7 @@
   </div>
 
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Sites Ativos por Região (em campo no momento)</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Sites fora por Região</div>
     <div class="g-3col" id="sitesForaRow"></div>
   </div>
 
@@ -361,6 +370,7 @@
   var currentTab = 'exec';
   var renderedTabs = {};
   var contractFilter = null;
+  var donutPrioFilter = { trj:null, tmg:null, tne:null };
 
   /* ── UTILS ────────────────────────────────────────────────── */
   function nn(n){ return n==null?0:n; }
@@ -374,14 +384,15 @@
   function allReady(){ return CONTRACTS.every(function(c){ return !ST[c.id].loading; }); }
   function destroyChart(id){ if(charts[id]){ try{ charts[id].destroy(); }catch(e){} charts[id]=null; } }
 
-  /* Robust date parser — handles ISO and dd/mm/yyyy */
+  /* Robust date parser — handles dd/mm/yyyy (GAS format) and ISO */
   function safeDate(s){
     if(!s) return null;
+    /* GAS sends "DD/MM/YYYY HH:MM:SS" — check FIRST to avoid US-format misparse */
+    var m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{2}):(\d{2}):(\d{2}))?/);
+    if(m){ var d2=new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0)); if(!isNaN(d2.getTime())) return d2; }
+    /* ISO / other formats */
     var d = new Date(s);
     if(!isNaN(d.getTime())) return d;
-    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    if(m){ var d2=new Date(+m[3],+m[2]-1,+m[1]); if(!isNaN(d2.getTime())) return d2; }
-    /* Try numeric timestamp */
     var n = Number(s);
     if(!isNaN(n) && n > 1e9){ var d3=new Date(n); if(!isNaN(d3.getTime())) return d3; }
     return null;
@@ -460,14 +471,35 @@
       slaByPriority[p] = r.total>0 ? Math.round(r.dentro/r.total*1000)/10 : null;
     });
 
-    /* Sites ativos por região — todos os incidents não resolvidos */
+    /* Backlog por prioridade — dentro/fora/preditiva do backlog atual */
+    var backlogByPriority={};
+    PRIORIDADES.forEach(function(p){ backlogByPriority[p]={dentro:0,fora:0,preditiva:0,total:0}; });
+    backlog.forEach(function(t){
+      var p=(t.prioridade||'').trim().toUpperCase();
+      if(!backlogByPriority[p]) return;
+      backlogByPriority[p].total++;
+      var s=t.statusSla||'';
+      if(s==='DENTRO DO SLA') backlogByPriority[p].dentro++;
+      else if(s==='PREDITIVA')    backlogByPriority[p].preditiva++;
+      else if(s==='FORA DO SLA')  backlogByPriority[p].fora++;
+    });
+
+    /* Sites fora por região — incidents não resolvidos, com/sem TSK aberta */
+    var backlogEnds={};
+    backlog.forEach(function(t){
+      var e=(t.enderecoId||'').toString().trim().toUpperCase();
+      if(e) backlogEnds[e]=true;
+    });
     var sitesForaAtivos=0, incByReg={};
     (incidents||[]).forEach(function(i){
       if((i.statusTrat||'ATIVO').toUpperCase()==='RESOLVIDO') return;
       sitesForaAtivos++;
       var r = regionFn(i);
-      if(!incByReg[r]) incByReg[r]=0;
-      incByReg[r]++;
+      var e = (i.enderecoId||'').toString().trim().toUpperCase();
+      var comTsk = e && backlogEnds[e] ? 1 : 0;
+      if(!incByReg[r]) incByReg[r]={total:0,comTsk:0,semTsk:0};
+      incByReg[r].total++;
+      if(comTsk) incByReg[r].comTsk++; else incByReg[r].semTsk++;
     });
 
     return {
@@ -477,7 +509,7 @@
       slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
       aging:aging,
       slaByRegion:slaByRegion, incidentsByRegion:incByReg,
-      slaByPriority:slaByPriority
+      slaByPriority:slaByPriority, backlogByPriority:backlogByPriority
     };
   }
 
@@ -504,6 +536,7 @@
     document.getElementById('tsEl').textContent='—';
     renderedTabs={};
     contractFilter=null;
+    CONTRACTS.forEach(function(c){ donutPrioFilter[c.id]=null; });
     CONTRACTS.forEach(fetchOne);
   }
 
@@ -639,64 +672,98 @@
     });
   }
 
-  /* ── DONUTS — SLA Geral Dentro e Fora do Prazo ────────────── */
+  /* ── DONUTS — SLA Geral Backlog Atual ─────────────────────── */
   function renderDonuts(){
     var el = document.getElementById('donutsRow');
     el.innerHTML='';
     CONTRACTS.forEach(function(c){
-      var K = ST[c.id].kpis||{};
-      var pct        = nn(K.slaGeral);
-      var pc         = pctColor(pct);
-      var prodDentro = nn(K.prodDentro);
-      var prodFora   = nn(K.prodFora);
-      var prodTotal  = nn(K.prodTotal);
-
-      var div = document.createElement('div');
-      div.className = 'g-card g-donut-outer';
-      div.innerHTML =
-        '<div class="g-ct" style="align-self:flex-start">'+
-          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
-          c.name+' — SLA Geral'+
-        '</div>'+
-        '<div class="g-donut-ring">'+
-          '<canvas id="donut_'+c.id+'" width="148" height="148"></canvas>'+
-          '<div class="g-donut-mid">'+
-            '<div class="g-donut-pct" style="color:'+pc+'">'+pct.toFixed(1)+'%</div>'+
-            '<div class="g-donut-lbl">dentro do prazo</div>'+
-          '</div>'+
-        '</div>'+
-        '<div class="g-kpi-row">'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(prodDentro)+'</div><div class="g-kpi-lbl">Dentro SLA</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(prodFora)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(prodTotal)+'</div><div class="g-kpi-lbl">Total</div></div>'+
-        '</div>';
-      el.appendChild(div);
-
-      destroyChart('donut_'+c.id);
-      /* Donut verde/vermelho proporcional às concluídas */
-      var dData = prodTotal > 0 ? [prodDentro, prodFora] : [0.001, 0];
-      charts['donut_'+c.id] = new Chart(document.getElementById('donut_'+c.id),{
-        type:'doughnut',
-        data:{ datasets:[{
-          data: dData,
-          backgroundColor: ['rgba(46,204,113,.85)','rgba(231,76,60,.80)'],
-          hoverBackgroundColor: ['#2ecc71','#e74c3c'],
-          borderWidth: 0, borderRadius: 4
-        }]},
-        options:{
-          cutout:'76%',
-          animation:{ animateRotate:true, duration:900 },
-          plugins:{
-            legend:{ display:false },
-            tooltip:{ enabled:true, callbacks:{
-              label:function(ctx){
-                return ctx.dataIndex===0?'Dentro do SLA: '+prodDentro:'Fora do SLA: '+prodFora;
-              }
-            }}
-          }
-        }
-      });
+      renderDonut(c);
     });
+  }
+
+  function renderDonut(c){
+    var el = document.getElementById('donutsRow');
+    var K  = ST[c.id].kpis||{};
+    var sel = donutPrioFilter[c.id];
+
+    var dentro, fora, pred, total;
+    if(sel){
+      var bp = (K.backlogByPriority||{})[sel]||{dentro:0,fora:0,preditiva:0,total:0};
+      dentro = bp.dentro; fora = bp.fora; pred = bp.preditiva; total = bp.total;
+    } else {
+      dentro = nn(K.dentroBl); fora = nn(K.foraSla); pred = nn(K.preditiva);
+      total  = nn(K.backlogTotal);
+    }
+
+    var pct = total>0 ? Math.round(dentro/total*1000)/10 : 0;
+    var pc  = pctColor(pct);
+
+    /* Priority buttons */
+    var prioBtns = PRIORIDADES.map(function(p){
+      var active = sel===p;
+      var style  = active
+        ? 'background:'+c.color+';color:#111;border-color:'+c.color+';font-weight:800;'
+        : 'color:'+c.color+'99;border-color:'+c.color+'44;';
+      return '<button class="g-prio-btn" style="'+style+'" onclick="setDonutPrio(\''+c.id+'\','+(active?'null':"'"+p+"'")+')">'+p+'</button>';
+    }).join('');
+
+    var existing = document.getElementById('donutCard_'+c.id);
+    var div = existing || document.createElement('div');
+    div.id = 'donutCard_'+c.id;
+    div.className = 'g-card g-donut-outer';
+    div.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'+
+        '<div class="g-ct" style="margin-bottom:0">'+
+          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
+          c.name+' — Backlog Atual'+
+        '</div>'+
+        '<div class="g-prio-row" style="margin-bottom:0">'+prioBtns+'</div>'+
+      '</div>'+
+      '<div class="g-donut-ring">'+
+        '<canvas id="donut_'+c.id+'" width="148" height="148"></canvas>'+
+        '<div class="g-donut-mid">'+
+          '<div class="g-donut-pct" style="color:'+pc+'">'+pct.toFixed(1)+'%</div>'+
+          '<div class="g-donut-lbl">dentro do SLA</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="g-kpi-row">'+
+        '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(dentro)+'</div><div class="g-kpi-lbl">Dentro SLA</div></div>'+
+        '<div class="g-kpi"><div class="g-kpi-val" style="color:#f39c12">'+fmtN(pred)+'</div><div class="g-kpi-lbl">Preditiva</div></div>'+
+        '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(fora)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
+        '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(total)+'</div><div class="g-kpi-lbl">Total</div></div>'+
+      '</div>'+(sel?'<div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px">Filtrado: '+sel+'</div>':'');
+    if(!existing) el.appendChild(div);
+
+    destroyChart('donut_'+c.id);
+    var dData = total>0 ? [dentro, pred, fora, Math.max(0,total-dentro-pred-fora)] : [0.001,0,0,0];
+    charts['donut_'+c.id] = new Chart(document.getElementById('donut_'+c.id),{
+      type:'doughnut',
+      data:{ datasets:[{
+        data: dData,
+        backgroundColor: ['rgba(46,204,113,.85)','rgba(243,156,18,.80)','rgba(231,76,60,.80)','rgba(255,255,255,.08)'],
+        hoverBackgroundColor: ['#2ecc71','#f39c12','#e74c3c','rgba(255,255,255,.12)'],
+        borderWidth: 0, borderRadius: 3
+      }]},
+      options:{
+        cutout:'76%',
+        animation:{ animateRotate:true, duration:700 },
+        plugins:{
+          legend:{ display:false },
+          tooltip:{ enabled:true, callbacks:{
+            label:function(ctx){
+              var labels=['Dentro','Preditiva','Fora','Indefinido'];
+              return labels[ctx.dataIndex]+': '+ctx.parsed;
+            }
+          }}
+        }
+      }
+    });
+  }
+
+  function setDonutPrio(contractId, prio){
+    donutPrioFilter[contractId] = prio;
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if(c) renderDonut(c);
   }
 
   /* ── SLA POR PRIORIDADE ───────────────────────────────────── */
@@ -839,26 +906,43 @@
       data:{
         labels: CONTRACTS.map(function(c){ return c.name; }),
         datasets:[
-          { label:'Dentro do SLA', data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodDentro); }), backgroundColor:'rgba(46,204,113,.80)', borderColor:'#2ecc71', borderWidth:1, borderRadius:5 },
-          { label:'Fora do SLA',   data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodFora); }),   backgroundColor:'rgba(231,76,60,.75)',  borderColor:'#e74c3c', borderWidth:1, borderRadius:5 }
+          { label:'Dentro do SLA', stack:'s',
+            data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodDentro); }),
+            backgroundColor:'rgba(46,204,113,.82)', borderColor:'#2ecc71', borderWidth:0, borderRadius:0 },
+          { label:'Fora do SLA', stack:'s',
+            data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodFora); }),
+            backgroundColor:'rgba(231,76,60,.78)', borderColor:'#e74c3c', borderWidth:0, borderRadius:0 }
         ]
       },
       options:{
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
         scales:{
-          x:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}} },
-          y:{ grid:{display:false}, ticks:{font:{size:14,weight:'bold'},color:'#f0f0f0'} }
+          x:{ stacked:true, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}} },
+          y:{ stacked:true, grid:{display:false}, ticks:{font:{size:14,weight:'bold'},color:'#f0f0f0'} }
         },
         plugins:{
           legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
-          tooltip:TT,
+          tooltip:{ callbacks:{ label:function(ctx){
+            var K = (ST[CONTRACTS[ctx.dataIndex].id].kpis)||{};
+            var total = nn(K.prodTotal);
+            var pct = total>0 ? Math.round(ctx.parsed.x/total*100) : 0;
+            return ctx.dataset.label+': '+ctx.parsed.x.toLocaleString('pt-BR')+' ('+pct+'%)';
+          }}, ...TT },
           datalabels:{
-            display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
-            anchor:'end', align:'end', color:'#f0f0f0', font:{size:12,weight:'bold'},
-            formatter:function(v){ return v>0?v.toLocaleString('pt-BR'):''; }, padding:{left:4}
+            display:function(ctx){
+              var v = ctx.dataset.data[ctx.dataIndex];
+              var K = (ST[CONTRACTS[ctx.dataIndex].id].kpis)||{};
+              return v>0 && nn(K.prodTotal)>0;
+            },
+            anchor:'center', align:'center', color:'#fff', font:{size:11,weight:'bold'},
+            formatter:function(v,ctx){
+              var K = (ST[CONTRACTS[ctx.dataIndex].id].kpis)||{};
+              var total = nn(K.prodTotal);
+              var pct = total>0 ? Math.round(v/total*100) : 0;
+              return v.toLocaleString('pt-BR')+' · '+pct+'%';
+            }
           }
-        },
-        layout:{ padding:{right:62} }
+        }
       }
     });
   }
@@ -898,7 +982,7 @@
     });
   }
 
-  /* ── SITES ATIVOS POR REGIÃO ──────────────────────────────── */
+  /* ── SITES FORA POR REGIÃO ────────────────────────────────── */
   function renderSitesFora(){
     var row = document.getElementById('sitesForaRow');
     row.innerHTML='';
@@ -914,18 +998,26 @@
       }
 
       var ibr  = K.incidentsByRegion||{};
-      var regs = Object.keys(ibr).sort(function(a,b){ return ibr[b]-ibr[a]; });
-      var h    = Math.max(120, regs.length*32);
+      var regs = Object.keys(ibr).sort(function(a,b){ return (ibr[b].total||ibr[b])-(ibr[a].total||ibr[a]); });
+      var h    = Math.max(120, regs.length*36);
+
+      /* Sumário TSK total */
+      var totalComTsk=0, totalSemTsk=0;
+      regs.forEach(function(r){ var v=ibr[r]; totalComTsk+=(v.comTsk||0); totalSemTsk+=(v.semTsk||0); });
 
       div.innerHTML =
         '<div class="g-ct">'+
           '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
-          c.name+' — Sites em Campo'+
+          c.name+' — Sites Fora'+
+        '</div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">'+
+          '<span style="color:#2ecc71">● '+totalComTsk+' com TSK</span>'+
+          '<span style="color:#e74c3c">● '+totalSemTsk+' sem TSK</span>'+
         '</div>'+
         '<div class="g-cbox" style="height:'+h+'px"><canvas id="sf_'+c.id+'"></canvas></div>';
 
       if(!regs.length){
-        div.querySelector('.g-cbox').innerHTML='<div class="g-empty" style="padding-top:30px">✓ Nenhum site ativo</div>';
+        div.querySelector('.g-cbox').innerHTML='<div class="g-empty" style="padding-top:30px">✓ Nenhum site fora</div>';
       }
       row.appendChild(div);
       if(!regs.length) return;
@@ -935,25 +1027,36 @@
         type:'bar',
         data:{
           labels: regs,
-          datasets:[{
-            label:'Sites', data:regs.map(function(r){ return ibr[r]; }),
-            backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:4
-          }]
+          datasets:[
+            { label:'Com TSK', stack:'s',
+              data:regs.map(function(r){ var v=ibr[r]; return v.comTsk||0; }),
+              backgroundColor:'rgba(46,204,113,.75)', borderColor:'#2ecc71', borderWidth:0, borderRadius:0 },
+            { label:'Sem TSK', stack:'s',
+              data:regs.map(function(r){ var v=ibr[r]; return v.semTsk||0; }),
+              backgroundColor:c.alpha+'0.78)', borderColor:c.color, borderWidth:0, borderRadius:0 }
+          ]
         },
         options:{
           indexAxis:'y', responsive:true, maintainAspectRatio:false,
           scales:{
-            x:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:10}}, beginAtZero:true },
-            y:{ grid:{display:false}, ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'} }
+            x:{ stacked:true, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:10}}, beginAtZero:true },
+            y:{ stacked:true, grid:{display:false}, ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'} }
           },
           plugins:{
-            legend:{ display:false }, tooltip:TT,
+            legend:{ position:'top', align:'end', labels:{boxWidth:8,font:{size:10},padding:10} },
+            tooltip:{ callbacks:{ label:function(ctx){
+              var r = regs[ctx.dataIndex];
+              var v = ibr[r]||{total:0,comTsk:0,semTsk:0};
+              if(ctx.datasetIndex===0) return 'Com TSK: '+v.comTsk;
+              return 'Sem TSK: '+v.semTsk+' | Total: '+v.total;
+            }}, ...TT },
             datalabels:{
-              display:true, anchor:'end', align:'end', color:'#f0f0f0', font:{size:11,weight:'bold'},
-              formatter:function(v){ return v; }, padding:{left:4}
+              display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
+              anchor:'center', align:'center', color:'#fff', font:{size:10,weight:'bold'},
+              formatter:function(v){ return v>0?v:''; }
             }
           },
-          layout:{ padding:{right:28} }
+          layout:{ padding:{right:8} }
         }
       });
     });
@@ -963,6 +1066,7 @@
   window.switchTab          = switchTab;
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
+  window.setDonutPrio       = setDonutPrio;
   renderStrips();
   renderFilterButtons();
   renderHeroKpis();
