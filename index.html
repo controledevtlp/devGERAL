@@ -8,12 +8,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
   <style>
-    /* ── TEMA: idêntico ao sistema TRJ/TMG/TNE ─────────────────── */
+    /* ── TEMA TRJ / TMG / TNE ─────────────────────────────────── */
     :root {
       --bg:      #0a0a0f;
       --card:    #13131a;
@@ -28,840 +27,850 @@
       --border:  rgba(255,140,0,.15);
       --border2: rgba(255,140,0,.32);
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body { background: var(--bg); color: var(--fg); }
-
     body {
       font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      min-height: 100vh;
-      position: relative;
+      font-size: 14px; line-height: 1.5; min-height: 100vh; position: relative;
     }
-
-    /* Brilho ambiente sutil — mesmo efeito do TRJ */
     body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
       background:
-        radial-gradient(ellipse at 10% 0%,  rgba(255,140,0,.10) 0%, transparent 55%),
-        radial-gradient(ellipse at 90% 100%, rgba(255,80,0,.07)  0%, transparent 55%);
+        radial-gradient(ellipse at 10% 0%,  rgba(255,140,0,.09) 0%, transparent 55%),
+        radial-gradient(ellipse at 90% 100%, rgba(255,80,0,.06)  0%, transparent 55%);
     }
-
-    /* Scrollbar discreta */
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255,140,0,.25); border-radius: 6px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,140,0,.45); }
 
-    /* ── LAYOUT ─────────────────────────────────────────────────── */
-    .g-wrap { position: relative; z-index: 1; }
+    /* ── LAYOUT ─────────────────────────────────────────────── */
+    .g-wrap { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
 
     /* Header */
-    .g-header {
-      background: var(--card);
-      border-bottom: 1px solid var(--border2);
-      padding: 18px 36px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .g-hdr {
+      background: var(--card); border-bottom: 1px solid var(--border2);
+      padding: 16px 36px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
     }
-    .g-header-left { display: flex; align-items: center; gap: 14px; }
+    .g-hdr-l { display: flex; align-items: center; gap: 14px; }
     .g-badge {
-      background: var(--primary);
-      color: #111;
-      font-family: 'Sora', sans-serif;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 2px;
-      padding: 5px 12px;
-      border-radius: 8px;
-      text-transform: uppercase;
+      background: var(--primary); color: #111; font-family: 'Sora', sans-serif;
+      font-size: 11px; font-weight: 800; letter-spacing: 2px;
+      padding: 5px 12px; border-radius: 8px; text-transform: uppercase; white-space: nowrap;
     }
-    .g-title {
-      font-family: 'Sora', sans-serif;
-      font-size: 17px;
-      font-weight: 800;
-      letter-spacing: -.01em;
-    }
-    .g-sub {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .g-ts { font-size: 12px; color: var(--muted); }
+    .g-title { font-family: 'Sora', sans-serif; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+    .g-sub { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-top: 2px; }
+    .g-ts { font-size: 12px; color: var(--muted); white-space: nowrap; }
     .g-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: transparent;
-      border: 1px solid var(--border2);
-      border-radius: 10px;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 8px 16px;
-      transition: all .15s;
-      letter-spacing: .5px;
+      display: inline-flex; align-items: center; gap: 6px; background: transparent;
+      border: 1px solid var(--border2); border-radius: 10px; color: var(--muted);
+      cursor: pointer; font-size: 12px; font-weight: 600; padding: 7px 16px;
+      transition: all .15s; letter-spacing: .5px; white-space: nowrap;
     }
     .g-btn:hover { border-color: var(--primary); color: var(--primary); }
 
-    /* Main */
-    .g-main {
-      padding: 28px 36px;
-      display: flex;
-      flex-direction: column;
-      gap: 32px;
-      max-width: 1440px;
-      margin: 0 auto;
+    /* Tabs nav */
+    .g-tabs-nav {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 0 36px; display: flex; gap: 0; flex-shrink: 0;
     }
+    .g-tab-btn {
+      padding: 14px 22px; font-size: 12px; font-weight: 700; letter-spacing: .8px;
+      text-transform: uppercase; color: var(--muted); cursor: pointer; border: none;
+      background: transparent; border-bottom: 2px solid transparent;
+      transition: all .15s; display: flex; align-items: center; gap: 7px;
+    }
+    .g-tab-btn:hover { color: var(--fg); }
+    .g-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .g-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .7; }
 
-    /* Section label */
-    .g-sec {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 2.5px;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    /* Tab content */
+    .g-tab-pane { display: none; }
+    .g-tab-pane.active { display: block; }
+
+    /* Main wrapper */
+    .g-main { padding: 24px 36px; display: flex; flex-direction: column; gap: 28px; max-width: 1440px; margin: 0 auto; width: 100%; }
+
+    /* Section header */
+    .g-sec { font-size: 10px; font-weight: 700; letter-spacing: 2.5px; color: var(--muted);
+      text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
     .g-sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .g-sec-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--primary);
-      box-shadow: 0 0 8px var(--primary);
-      flex-shrink: 0;
-    }
+    .g-sec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 8px var(--primary); flex-shrink: 0; }
 
     /* Card */
     .g-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 22px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px;
       transition: border-color .25s ease, box-shadow .25s ease;
     }
     .g-card:hover { border-color: var(--border2); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
-
-    /* Card title */
-    .g-ct {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 18px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .g-ct-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--primary);
-      flex-shrink: 0;
-    }
+    .g-ct { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--muted);
+      text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+    .g-ct-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
     /* Grids */
     .g-3col { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
     .g-2col { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+    .g-6col { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; }
 
-    /* Contract strips */
+    /* ── HERO KPI TILES ──────────────────────────────────────── */
+    .g-hero {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+      position: relative; overflow: hidden;
+      transition: border-color .25s ease, box-shadow .25s ease, transform .2s ease;
+    }
+    .g-hero::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
+    .g-hero:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+    .g-hero-lbl { font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+    .g-hero-val { font-family: 'Sora', sans-serif; font-size: 36px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+    .g-hero-sub { font-size: 10px; color: var(--muted); line-height: 1.5; }
+    .g-hero-break {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      padding-top: 8px; border-top: 1px solid var(--border);
+    }
+    .g-hero-chip {
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+      background: rgba(255,255,255,.05); letter-spacing: .5px;
+    }
+
+    /* ── CONTRACT STRIPS ──────────────────────────────────────── */
     .g-strip {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-left-width: 3px;
-      border-radius: 12px;
-      padding: 14px 18px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: border-color .2s ease, box-shadow .2s ease;
+      background: var(--card); border: 1px solid var(--border); border-left-width: 3px;
+      border-radius: 12px; padding: 14px 18px; display: flex; align-items: center;
+      justify-content: space-between; transition: border-color .2s, box-shadow .2s;
     }
     .g-strip:hover { box-shadow: 0 6px 22px rgba(0,0,0,.38); }
-    .g-strip-name {
-      font-family: 'Sora', sans-serif;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 2px;
-    }
+    .g-strip-name { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: 2px; }
     .g-strip-sub  { font-size: 11px; color: var(--muted); margin-top: 3px; }
     .g-strip-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .g-strip-ts   { font-size: 11px; color: var(--muted); text-align: right; margin-top: 3px; }
     .g-strip-st   { font-size: 11px; font-weight: 700; }
 
-    /* Donut */
-    .g-donut-outer {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .g-donut-ring  { position: relative; width: 156px; height: 156px; }
-    .g-donut-mid {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-    }
-    .g-donut-pct {
-      font-family: 'Sora', sans-serif;
-      font-size: 28px;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .g-donut-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: .5px; }
-
-    /* KPI tiles */
+    /* ── DONUT ────────────────────────────────────────────────── */
+    .g-donut-outer { display: flex; flex-direction: column; align-items: center; }
+    .g-donut-ring  { position: relative; width: 148px; height: 148px; }
+    .g-donut-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+    .g-donut-pct { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 800; line-height: 1; }
+    .g-donut-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; }
     .g-kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; width: 100%; margin-top: 16px; }
-    .g-kpi {
-      background: var(--card2);
-      border-radius: 8px;
-      padding: 9px 10px;
-      text-align: center;
-    }
+    .g-kpi { background: var(--card2); border-radius: 8px; padding: 9px 10px; text-align: center; }
     .g-kpi-val { font-family: 'Sora', sans-serif; font-size: 18px; font-weight: 800; line-height: 1; }
     .g-kpi-lbl { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 3px; }
 
-    /* Chart wrap com altura fixa (para gráficos regionais) */
-    .g-chart-box { position: relative; }
+    /* ── CHART BOX ────────────────────────────────────────────── */
+    .g-cbox { position: relative; }
 
-    /* Skeleton */
-    .g-skel {
-      background: linear-gradient(90deg, var(--card) 25%, var(--card2) 50%, var(--card) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.4s infinite;
-      border-radius: 8px;
-    }
+    /* ── SKELETON / ESTADO ────────────────────────────────────── */
+    .g-skel { background: linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
     @keyframes shimmer { to { background-position: -200% 0; } }
+    .g-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 24px 0; }
+    .g-err   { color: var(--red);   font-size: 12px; text-align: center; padding: 24px 0; }
 
-    /* Empty/Error */
-    .g-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 20px 0; }
-    .g-err   { color: var(--red);   font-size: 12px; text-align: center; padding: 20px 0; }
+    /* ── MATRIX (SLA por prioridade) ──────────────────────────── */
+    .g-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .g-matrix th { padding: 10px 14px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; text-align: center; border-bottom: 1px solid var(--border); }
+    .g-matrix th:first-child { text-align: left; }
+    .g-matrix td { padding: 12px 14px; text-align: center; border-bottom: 1px solid rgba(255,140,0,.06); }
+    .g-matrix td:first-child { font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 800; text-align: left; }
+    .g-matrix tr:hover td { background: rgba(255,140,0,.04); }
+    .g-pct-pill { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; min-width: 60px; }
+    .g-prazo-chip { font-size: 10px; color: var(--muted); margin-top: 2px; display: block; }
+    .g-meta-bar { height: 4px; border-radius: 4px; margin-top: 6px; }
+    .g-matrix td.no-data { color: var(--muted); font-size: 11px; }
 
-    /* Responsive */
-    @media (max-width: 960px) {
-      .g-3col { grid-template-columns: 1fr; }
-      .g-2col { grid-template-columns: 1fr; }
-      .g-main   { padding: 16px; }
-      .g-header { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
-    }
+    /* ── RESPONSIVE ────────────────────────────────────────────── */
+    @media (max-width: 1100px) { .g-6col { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 960px)  { .g-3col, .g-6col { grid-template-columns: 1fr; } .g-2col { grid-template-columns: 1fr; } }
+    @media (max-width: 700px)  { .g-main { padding: 14px; } .g-hdr { padding: 12px 14px; flex-wrap: wrap; gap: 8px; } .g-tabs-nav { padding: 0 14px; } }
   </style>
 </head>
 <body>
 <div class="g-wrap">
 
-<!-- ── HEADER ─────────────────────────────────────────────────────── -->
-<header class="g-header">
-  <div class="g-header-left">
+<!-- ── HEADER ─────────────────────────────────────────────── -->
+<header class="g-hdr">
+  <div class="g-hdr-l">
     <span class="g-badge">Gerencial</span>
     <div>
       <div class="g-title">Visão Comparativa de Contratos</div>
       <div class="g-sub">TRJ · TMG · TNE — Dados em tempo real</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:14px;">
+  <div style="display:flex;align-items:center;gap:12px;">
     <span class="g-ts" id="tsEl">—</span>
     <button class="g-btn" onclick="loadAll()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </svg>
-      Atualizar
+      </svg>Atualizar
     </button>
   </div>
 </header>
 
-<main class="g-main">
+<!-- ── TABS ────────────────────────────────────────────────── -->
+<nav class="g-tabs-nav">
+  <button id="btn-exec" class="g-tab-btn active" onclick="switchTab('exec')">
+    <span class="g-tab-dot"></span>Painel Executivo
+  </button>
+  <button id="btn-sla" class="g-tab-btn" onclick="switchTab('sla')">
+    <span class="g-tab-dot"></span>SLA &amp; Aderência
+  </button>
+  <button id="btn-op" class="g-tab-btn" onclick="switchTab('op')">
+    <span class="g-tab-dot"></span>Operacional
+  </button>
+</nav>
 
-  <!-- 1. CONTRATOS ATIVOS -->
+<!-- ══════════════════════════════════════════════════════════
+     TAB 1 — PAINEL EXECUTIVO
+══════════════════════════════════════════════════════════ -->
+<div id="tab-exec" class="g-tab-pane active">
+<div class="g-main">
+
+  <!-- HERO KPIs -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Contratos Ativos</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Consolidado Geral — Todos os Contratos</div>
+    <div class="g-6col" id="heroRow"></div>
+  </div>
+
+  <!-- STRIPS -->
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Status dos Contratos</div>
     <div class="g-3col" id="strips"></div>
   </div>
 
-  <!-- 2. SLA GERAL -->
+  <!-- DONUTS -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>SLA Geral — % Concluídas Dentro do Prazo</div>
     <div class="g-3col" id="donutsRow"></div>
   </div>
 
-  <!-- 3. PRODUTIVIDADE -->
+  <!-- COMPOSIÇÃO DO BACKLOG -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Produtividade — Encerradas Dentro / Fora do SLA</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Composição do Backlog por Contrato</div>
     <div class="g-card">
-      <div class="g-ct"><span class="g-ct-dot"></span>Atividades concluídas por situação de SLA</div>
-      <div class="g-chart-box" style="height:110px;">
-        <canvas id="chartProd"></canvas>
-      </div>
+      <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Distribuição do backlog ativo por situação de SLA</div>
+      <div class="g-cbox" style="height:120px;"><canvas id="chartBacklogComp"></canvas></div>
     </div>
   </div>
 
-  <!-- 4. AGING DO BACKLOG -->
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 2 — SLA & ADERÊNCIA
+══════════════════════════════════════════════════════════ -->
+<div id="tab-sla" class="g-tab-pane">
+<div class="g-main">
+
+  <!-- SLA POR PRIORIDADE — tabela + barras -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Aging do Backlog — Tempo em Aberto</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>SLA por Prioridade — % Concluídas Dentro do Prazo</div>
     <div class="g-card">
-      <div class="g-ct"><span class="g-ct-dot"></span>Distribuição do backlog por faixa de idade</div>
-      <div class="g-chart-box" style="height:160px;">
-        <canvas id="chartAging"></canvas>
-      </div>
+      <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Aderência por faixa de prioridade — Meta: P1 ≥ 80% · P2-P5 ≥ 70%</div>
+      <div id="slaPrioTable"></div>
+      <div class="g-cbox" style="height:180px;margin-top:20px;"><canvas id="chartSlaPrio"></canvas></div>
     </div>
   </div>
 
-  <!-- 5. SITES FORA POR REGIÃO -->
-  <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Sites Fora do SLA por Região</div>
-    <div class="g-3col" id="sitesForaRow"></div>
-  </div>
-
-  <!-- 6. SLA POR REGIÃO -->
+  <!-- SLA POR REGIÃO -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>SLA por Região — % Dentro do Prazo (concluídas)</div>
     <div class="g-3col" id="slaRegiaoRow"></div>
   </div>
 
-</main>
 </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 3 — OPERACIONAL
+══════════════════════════════════════════════════════════ -->
+<div id="tab-op" class="g-tab-pane">
+<div class="g-main">
+
+  <!-- PRODUTIVIDADE -->
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Produtividade — Encerradas Dentro / Fora do SLA</div>
+    <div class="g-card">
+      <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Total de atividades concluídas por situação de SLA</div>
+      <div class="g-cbox" style="height:110px;"><canvas id="chartProd"></canvas></div>
+    </div>
+  </div>
+
+  <!-- AGING DO BACKLOG -->
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Aging do Backlog — Tempo em Aberto</div>
+    <div class="g-card">
+      <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Distribuição do backlog por faixa de idade</div>
+      <div class="g-cbox" style="height:170px;"><canvas id="chartAging"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SITES FORA POR REGIÃO -->
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Sites Fora do SLA por Região (backlog)</div>
+    <div class="g-3col" id="sitesForaRow"></div>
+  </div>
+
+</div>
+</div>
+
+</div><!-- /g-wrap -->
 
 <script>
 (function () {
   'use strict';
 
-  /* Registra o plugin de datalabels globalmente */
   Chart.register(ChartDataLabels);
-  /* Desativa por padrão — ativamos seletivamente por gráfico */
   Chart.defaults.set('plugins.datalabels', { display: false });
 
-  /* ── CONFIG DOS CONTRATOS ───────────────────────────────────── */
-  var C = [
+  /* ── TOOLTIP STYLE global ─────────────────────────────────── */
+  var TT = { backgroundColor:'#1a1a24', titleColor:'#ff8c00', bodyColor:'#f0f0f0', borderColor:'rgba(255,140,0,.4)', borderWidth:1, padding:10, cornerRadius:8 };
+
+  /* ── CONTRATOS ────────────────────────────────────────────── */
+  var CONTRACTS = [
     {
-      id: 'trj', name: 'TRJ', label: 'Rio de Janeiro',
-      sub: '5 regiões · RJ + ES',
-      color: '#ff8c00', alpha: 'rgba(255,140,0,',
-      url: 'https://script.google.com/macros/s/AKfycbxu2uWr0zWK9ozBJ9a8_d95j6_SDeSJTZPtm3R8zinn_ZFZBNYK6FcHT6SNilN16VOZ/exec',
-      dash: 'https://controledevtlp.github.io/devTRJ/dashboard-publico.html',
-      region: function(t){ return (t.regiao || '').trim() || 'SEM REGIÃO'; }
+      id:'trj', name:'TRJ', label:'Rio de Janeiro', sub:'5 regiões · RJ + ES',
+      color:'#ff8c00', alpha:'rgba(255,140,0,',
+      url:'https://script.google.com/macros/s/AKfycbxu2uWr0zWK9ozBJ9a8_d95j6_SDeSJTZPtm3R8zinn_ZFZBNYK6FcHT6SNilN16VOZ/exec',
+      dash:'https://controledevtlp.github.io/devTRJ/dashboard-publico.html',
+      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; }
     },
     {
-      id: 'tmg', name: 'TMG', label: 'Minas Gerais',
-      sub: '8 ANFs · ANF31–ANF38',
-      color: '#3498db', alpha: 'rgba(52,152,219,',
-      url: 'https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec',
-      dash: null,
-      region: function(t){ return (t.anf || t.regiao || '').trim() || 'SEM ANF'; }
+      id:'tmg', name:'TMG', label:'Minas Gerais', sub:'8 ANFs · ANF31–ANF38',
+      color:'#3498db', alpha:'rgba(52,152,219,',
+      url:'https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec',
+      dash:null,
+      region:function(t){ return (t.anf||t.regiao||'').trim()||'SEM ANF'; }
     },
     {
-      id: 'tne', name: 'TNE', label: 'Nordeste',
-      sub: '8 estados · PE/PB/CE/RN/PI/SE/AL/BA',
-      color: '#2ecc71', alpha: 'rgba(46,204,113,',
-      url: 'https://script.google.com/macros/s/AKfycbwSPcNv-9o5xNf__chQquuhIGJyn2ff4BNYb8iPCnS2rOq2GClb3sfRrY2_j9JX8mgoOA/exec',
-      dash: null,
-      region: function(t){ return (t.regiao || '').trim() || 'SEM REGIÃO'; }
+      id:'tne', name:'TNE', label:'Nordeste', sub:'8 estados · PE/PB/CE/RN/PI/SE/AL/BA',
+      color:'#2ecc71', alpha:'rgba(46,204,113,',
+      url:'https://script.google.com/macros/s/AKfycbwSPcNv-9o5xNf__chQquuhIGJyn2ff4BNYb8iPCnS2rOq2GClb3sfRrY2_j9JX8mgoOA/exec',
+      dash:null,
+      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; }
     }
   ];
 
-  /* ── STATE ──────────────────────────────────────────────────── */
-  var ST = {};
-  C.forEach(function(c){
-    ST[c.id] = { loading: true, kpis: null, savedAt: null, error: null };
-  });
-  var charts = {};
+  var PRIORIDADES = ['P1','P2','P3','P4','P5'];
+  var PRAZO_LABELS = { P1:'4h', P2:'6h', P3:'12h', P4:'24h', P5:'48h' };
+  var META_PRIO = { P1:80, P2:75, P3:70, P4:70, P5:70 };
 
-  /* ── COMPUTE ────────────────────────────────────────────────── */
-  function computeKpis(tasks, regionFn) {
-    var EMPTY = {
-      backlogTotal:0, foraSla:0, preditiva:0, dentroBl:0, backlogIndef:0,
-      prodTotal:0, prodDentro:0, prodFora:0, slaGeral:0,
-      aging: { lt7:0, d7_14:0, d14_30:0, gt30:0 },
-      sitesFora: {}, slaByRegion: {}
-    };
-    if (!Array.isArray(tasks) || !tasks.length) return EMPTY;
+  /* ── STATE ────────────────────────────────────────────────── */
+  var ST = {};
+  CONTRACTS.forEach(function(c){ ST[c.id]={ loading:true, kpis:null, savedAt:null, error:null }; });
+
+  var charts = {};
+  var currentTab = 'exec';
+  var renderedTabs = {};
+
+  /* ── COMPUTE ──────────────────────────────────────────────── */
+  function computeKpis(tasks, incidents, regionFn) {
+    var Z = { backlogTotal:0, foraSla:0, preditiva:0, dentroBl:0, backlogIndef:0,
+               prodTotal:0, prodDentro:0, prodFora:0, slaGeral:0, sitesForaAtivos:0,
+               aging:{lt7:0,d7_14:0,d14_30:0,gt30:0},
+               sitesFora:{}, slaByRegion:{},
+               slaByPriority:{P1:null,P2:null,P3:null,P4:null,P5:null} };
+    if (!Array.isArray(tasks)||!tasks.length) return Z;
 
     var now = Date.now();
-    var backlog = [], completed = [];
-
+    var backlog=[], completed=[];
     tasks.forEach(function(t){
-      var fim    = (t.fimCalc           || '').toString().trim();
-      var motivo = (t.motivoCancelamento || '').toString().trim();
-      if (fim)        completed.push(t);
+      var fim    = (t.fimCalc||'').toString().trim();
+      var motivo = (t.motivoCancelamento||'').toString().trim();
+      if (fim) completed.push(t);
       else if (!motivo) backlog.push(t);
     });
 
-    /* KPIs básicos */
-    var foraSla   = backlog.filter(function(t){ return t.statusSla === 'FORA DO SLA';    }).length;
-    var preditiva = backlog.filter(function(t){ return t.statusSla === 'PREDITIVA';      }).length;
-    var dentroBl  = backlog.filter(function(t){ return t.statusSla === 'DENTRO DO SLA';  }).length;
+    var foraSla   = backlog.filter(function(t){ return t.statusSla==='FORA DO SLA'; }).length;
+    var preditiva = backlog.filter(function(t){ return t.statusSla==='PREDITIVA'; }).length;
+    var dentroBl  = backlog.filter(function(t){ return t.statusSla==='DENTRO DO SLA'; }).length;
     var indef     = backlog.filter(function(t){
-      var s = (t.statusSla || '').trim();
-      return !s || (s !== 'FORA DO SLA' && s !== 'DENTRO DO SLA' && s !== 'PREDITIVA');
+      var s=(t.statusSla||'').trim();
+      return !s||(s!=='FORA DO SLA'&&s!=='DENTRO DO SLA'&&s!=='PREDITIVA');
     }).length;
-    var prodDentro = completed.filter(function(t){ return t.statusSla === 'DENTRO DO SLA'; }).length;
-    var prodFora   = completed.length - prodDentro;
-    var slaGeral   = completed.length > 0
-      ? Math.round(prodDentro / completed.length * 1000) / 10 : 0;
+    var prodDentro = completed.filter(function(t){ return t.statusSla==='DENTRO DO SLA'; }).length;
+    var slaGeral   = completed.length>0 ? Math.round(prodDentro/completed.length*1000)/10 : 0;
 
-    /* Aging do backlog */
-    var aging = { lt7:0, d7_14:0, d14_30:0, gt30:0 };
+    /* Aging */
+    var aging={lt7:0,d7_14:0,d14_30:0,gt30:0};
     backlog.forEach(function(t){
-      if (!t.createdAt) { aging.gt30++; return; }
-      var dias = (now - new Date(t.createdAt).getTime()) / 86400000;
-      if      (dias <  7) aging.lt7++;
-      else if (dias < 14) aging.d7_14++;
-      else if (dias < 30) aging.d14_30++;
-      else                aging.gt30++;
+      if (!t.createdAt){aging.gt30++;return;}
+      var d=(now-new Date(t.createdAt).getTime())/86400000;
+      if(d<7)aging.lt7++; else if(d<14)aging.d7_14++; else if(d<30)aging.d14_30++; else aging.gt30++;
     });
 
-    /* Sites fora do SLA por região */
-    var sfMap = {};
+    /* Sites fora por região (distinct enderecoId no backlog com foraSla) */
+    var sfMap={};
     backlog.forEach(function(t){
-      if (t.statusSla !== 'FORA DO SLA') return;
-      var r = regionFn(t);
-      if (!sfMap[r]) sfMap[r] = new Set();
-      sfMap[r].add(t.enderecoId || t.osNumero || Math.random());
+      if(t.statusSla!=='FORA DO SLA')return;
+      var r=regionFn(t);
+      if(!sfMap[r])sfMap[r]=new Set();
+      sfMap[r].add(t.enderecoId||t.osNumero||Math.random());
     });
-    var sitesFora = {};
-    Object.keys(sfMap).forEach(function(r){ sitesFora[r] = sfMap[r].size; });
+    var sitesFora={};
+    Object.keys(sfMap).forEach(function(r){ sitesFora[r]=sfMap[r].size; });
 
     /* SLA por região (concluídas) */
-    var slaByRegion = {};
+    var slaByRegion={};
     completed.forEach(function(t){
-      var r = regionFn(t);
-      if (!slaByRegion[r]) slaByRegion[r] = { dentro:0, total:0 };
+      var r=regionFn(t);
+      if(!slaByRegion[r])slaByRegion[r]={dentro:0,total:0};
       slaByRegion[r].total++;
-      if (t.statusSla === 'DENTRO DO SLA') slaByRegion[r].dentro++;
+      if(t.statusSla==='DENTRO DO SLA')slaByRegion[r].dentro++;
     });
 
+    /* SLA por prioridade (concluídas) */
+    var prioMap={};
+    PRIORIDADES.forEach(function(p){prioMap[p]={dentro:0,total:0};});
+    completed.forEach(function(t){
+      var p=(t.prioridade||'').trim().toUpperCase();
+      if(!prioMap[p])return;
+      prioMap[p].total++;
+      if(t.statusSla==='DENTRO DO SLA')prioMap[p].dentro++;
+    });
+    var slaByPriority={};
+    PRIORIDADES.forEach(function(p){
+      var r=prioMap[p];
+      slaByPriority[p]=r.total>0?Math.round(r.dentro/r.total*1000)/10:null;
+    });
+
+    /* Sites fora ativos (incidentsEnriched) */
+    var sitesForaAtivos=(incidents||[]).filter(function(i){
+      return (i.statusTrat||'ATIVO').toUpperCase()!=='RESOLVIDO';
+    }).length;
+
     return {
-      backlogTotal: backlog.length, foraSla: foraSla,
-      preditiva: preditiva, dentroBl: dentroBl, backlogIndef: indef,
-      prodTotal: completed.length, prodDentro: prodDentro, prodFora: prodFora,
-      slaGeral: slaGeral,
-      aging: aging, sitesFora: sitesFora, slaByRegion: slaByRegion
+      backlogTotal:backlog.length, foraSla:foraSla, preditiva:preditiva,
+      dentroBl:dentroBl, backlogIndef:indef,
+      prodTotal:completed.length, prodDentro:prodDentro, prodFora:completed.length-prodDentro,
+      slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
+      aging:aging, sitesFora:sitesFora, slaByRegion:slaByRegion, slaByPriority:slaByPriority
     };
   }
 
-  /* ── FETCH ──────────────────────────────────────────────────── */
+  /* ── FETCH ────────────────────────────────────────────────── */
   function fetchOne(c){
-    ST[c.id].loading = true;
+    ST[c.id].loading=true;
     renderStrips();
-    fetch(c.url + '?action=getDashboardSnapshot&_t=' + Date.now(), { cache: 'no-store' })
-      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    fetch(c.url+'?action=getDashboardSnapshot&_t='+Date.now(),{cache:'no-store'})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
       .then(function(res){
-        if (!res.ok) throw new Error(res.error || 'Resposta inválida');
-        var tasks = (res.data && res.data.tasksEnriched) ? res.data.tasksEnriched : [];
-        ST[c.id] = {
-          loading: false,
-          kpis: computeKpis(tasks, c.region),
-          savedAt: res.savedAt || null,
-          error: null
-        };
+        if(!res.ok)throw new Error(res.error||'Resposta inválida');
+        var tasks=(res.data&&res.data.tasksEnriched)?res.data.tasksEnriched:[];
+        var incs =(res.data&&res.data.incidentsEnriched)?res.data.incidentsEnriched:[];
+        ST[c.id]={loading:false,kpis:computeKpis(tasks,incs,c.region),savedAt:res.savedAt||null,error:null};
         render();
       })
       .catch(function(err){
-        ST[c.id] = { loading: false, kpis: null, savedAt: null, error: err.message || 'Erro' };
+        ST[c.id]={loading:false,kpis:null,savedAt:null,error:err.message||'Erro'};
         render();
       });
   }
-
   function loadAll(){
-    document.getElementById('tsEl').textContent = '—';
-    C.forEach(fetchOne);
+    document.getElementById('tsEl').textContent='—';
+    renderedTabs={};
+    CONTRACTS.forEach(fetchOne);
   }
 
-  /* ── UTILS ──────────────────────────────────────────────────── */
-  function nn(n){ return n == null ? 0 : n; }
-  function fmtN(n){ return nn(n).toLocaleString('pt-BR'); }
+  /* ── UTILS ────────────────────────────────────────────────── */
+  function nn(n){return n==null?0:n;}
+  function fmtN(n){return nn(n).toLocaleString('pt-BR');}
   function fmtDt(iso){
-    if (!iso) return '—';
-    try { return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
-    catch(e){ return '—'; }
+    if(!iso)return'—';
+    try{return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return'—';}
   }
-  function pctColor(p){ return p >= 60 ? '#2ecc71' : (p >= 35 ? '#f39c12' : '#e74c3c'); }
+  function pctColor(p){return p>=60?'#2ecc71':(p>=35?'#f39c12':'#e74c3c');}
+  function pctBg(p){return p>=60?'rgba(46,204,113,.12)':(p>=35?'rgba(243,156,18,.12)':'rgba(231,76,60,.12)');}
+  function allReady(){return CONTRACTS.every(function(c){return!ST[c.id].loading;});}
+  function destroyChart(id){if(charts[id]){try{charts[id].destroy();}catch(e){}charts[id]=null;}}
 
-  /* Defaults globais do Chart.js */
-  Chart.defaults.color       = '#8a8a93';
-  Chart.defaults.borderColor = 'rgba(255,140,0,.07)';
-  Chart.defaults.font.family = "ui-sans-serif, system-ui, 'Segoe UI', sans-serif";
-  Chart.defaults.font.size   = 12;
+  Chart.defaults.color='#8a8a93';
+  Chart.defaults.borderColor='rgba(255,140,0,.07)';
+  Chart.defaults.font.family="ui-sans-serif,system-ui,'Segoe UI',sans-serif";
+  Chart.defaults.font.size=12;
 
-  function destroyChart(id){
-    if (charts[id]) { try { charts[id].destroy(); } catch(e){} charts[id] = null; }
+  /* ── TAB SWITCHING ────────────────────────────────────────── */
+  function switchTab(id){
+    currentTab=id;
+    document.querySelectorAll('.g-tab-btn').forEach(function(b){b.classList.remove('active');});
+    document.querySelectorAll('.g-tab-pane').forEach(function(p){p.classList.remove('active');});
+    document.getElementById('btn-'+id).classList.add('active');
+    document.getElementById('tab-'+id).classList.add('active');
+    if(allReady()&&!renderedTabs[id]){ renderTabContent(id); renderedTabs[id]=true; }
   }
 
-  /* ── RENDER PRINCIPAL ───────────────────────────────────────── */
+  /* ── RENDER PRINCIPAL ─────────────────────────────────────── */
   function render(){
     renderStrips();
-    if (!C.every(function(c){ return !ST[c.id].loading; })) return;
-    renderDonuts();
-    renderProd();
-    renderAging();
-    renderSitesFora();
-    renderSlaRegiao();
-    document.getElementById('tsEl').textContent =
-      'Atualizado ' + new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    renderHeroKpis();
+    if(!allReady())return;
+    renderTabContent(currentTab);
+    renderedTabs[currentTab]=true;
+    document.getElementById('tsEl').textContent=
+      'Atualizado '+new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   }
 
-  /* ── STRIPS ─────────────────────────────────────────────────── */
+  function renderTabContent(tab){
+    if(tab==='exec'){ renderDonuts(); renderBacklogComp(); }
+    else if(tab==='sla'){ renderSlaPrioridade(); renderSlaRegiao(); }
+    else if(tab==='op'){ renderProd(); renderAging(); renderSitesFora(); }
+  }
+
+  /* ── STRIPS ───────────────────────────────────────────────── */
   function renderStrips(){
-    document.getElementById('strips').innerHTML = C.map(function(c){
-      var s = ST[c.id];
-      var dc = s.loading ? '#f39c12' : (s.error ? '#e74c3c' : '#2ecc71');
-      var tx = s.loading ? 'Carregando' : (s.error ? 'Offline' : 'Online');
-      var link = c.dash
-        ? ' <a href="'+c.dash+'" target="_blank" style="font-size:10px;color:var(--muted);margin-left:6px;text-decoration:none;opacity:.7;" title="Abrir dashboard">↗</a>'
-        : '';
-      return '<div class="g-strip" style="border-left-color:'+c.color+'">' +
-        '<div>' +
-          '<div class="g-strip-name" style="color:'+c.color+'">'+c.name+link+'</div>' +
-          '<div class="g-strip-sub">'+c.label+' · '+c.sub+'</div>' +
-        '</div>' +
-        '<div style="text-align:right">' +
-          '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">' +
-            '<div class="g-strip-dot" style="background:'+dc+';box-shadow:0 0 7px '+dc+'90"></div>' +
-            '<span class="g-strip-st" style="color:'+dc+'">'+tx+'</span>' +
-          '</div>' +
-          '<div class="g-strip-ts">'+fmtDt(s.savedAt)+'</div>' +
-        '</div>' +
+    document.getElementById('strips').innerHTML=CONTRACTS.map(function(c){
+      var s=ST[c.id];
+      var dc=s.loading?'#f39c12':(s.error?'#e74c3c':'#2ecc71');
+      var tx=s.loading?'Carregando':(s.error?'Offline':'Online');
+      var lnk=c.dash?
+        ' <a href="'+c.dash+'" target="_blank" style="font-size:10px;color:var(--muted);margin-left:6px;opacity:.6;text-decoration:none;">↗</a>':'';
+      return '<div class="g-strip" style="border-left-color:'+c.color+'">'+
+        '<div>'+
+          '<div class="g-strip-name" style="color:'+c.color+'">'+c.name+lnk+'</div>'+
+          '<div class="g-strip-sub">'+c.label+' · '+c.sub+'</div>'+
+        '</div>'+
+        '<div style="text-align:right">'+
+          '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">'+
+            '<div class="g-strip-dot" style="background:'+dc+';box-shadow:0 0 7px '+dc+'90"></div>'+
+            '<span class="g-strip-st" style="color:'+dc+'">'+tx+'</span>'+
+          '</div>'+
+          '<div class="g-strip-ts">'+fmtDt(s.savedAt)+'</div>'+
+        '</div>'+
       '</div>';
     }).join('');
   }
 
-  /* ── DONUTS ─────────────────────────────────────────────────── */
-  function renderDonuts(){
-    var el = document.getElementById('donutsRow');
-    el.innerHTML = '';
-    C.forEach(function(c){
-      var K = (ST[c.id].kpis || {});
-      var pct = nn(K.slaGeral);
-      var pc  = pctColor(pct);
+  /* ── HERO KPIs ────────────────────────────────────────────── */
+  function renderHeroKpis(){
+    var loading=!allReady();
+    var totSitesF=0, totBacklog=0, totForaSla=0, totPreditiva=0, totIndef=0, totProd=0;
+    var slaVals=[]; var slaWeights=[];
+    CONTRACTS.forEach(function(c){
+      var K=ST[c.id].kpis||{};
+      totSitesF  +=nn(K.sitesForaAtivos);
+      totBacklog +=nn(K.backlogTotal);
+      totForaSla +=nn(K.foraSla);
+      totPreditiva+=nn(K.preditiva);
+      totIndef   +=nn(K.backlogIndef);
+      totProd    +=nn(K.prodTotal);
+      if(K.prodTotal>0){slaVals.push(K.slaGeral*K.prodTotal);slaWeights.push(K.prodTotal);}
+    });
+    var totWeight=slaWeights.reduce(function(a,b){return a+b;},0);
+    var slaMedia=totWeight>0?Math.round(slaVals.reduce(function(a,b){return a+b;},0)/totWeight*10)/10:0;
 
-      var div = document.createElement('div');
-      div.className = 'g-card g-donut-outer';
-      div.innerHTML =
-        '<div class="g-ct" style="align-self:flex-start">' +
-          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>' +
-          c.name+' — SLA Geral' +
-        '</div>' +
-        '<div class="g-donut-ring">' +
-          '<canvas id="donut_'+c.id+'" width="156" height="156"></canvas>' +
-          '<div class="g-donut-mid">' +
-            '<div class="g-donut-pct" style="color:'+pc+'">'+pct.toFixed(1)+'%</div>' +
-            '<div class="g-donut-lbl">dentro do prazo</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="g-kpi-row">' +
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(K.backlogTotal)+'</div><div class="g-kpi-lbl">Backlog</div></div>' +
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(K.foraSla)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>' +
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(K.prodTotal)+'</div><div class="g-kpi-lbl">Concluídas</div></div>' +
+    function makeBreak(field){
+      return CONTRACTS.map(function(c){
+        var K=ST[c.id].kpis||{};
+        var v=K[field];
+        if(v==null&&field==='slaGeral')v=K.slaGeral;
+        return '<span class="g-hero-chip" style="color:'+c.color+'">'+c.name+' '+(loading?'…':(field==='slaGeral'?nn(K.slaGeral).toFixed(1)+'%':fmtN(K[field])))+'</span>';
+      }).join('');
+    }
+
+    var defs=[
+      { id:'hSites',  lbl:'Sites Fora Ativos',  val: loading?'…':fmtN(totSitesF),   cor:'#e74c3c', sub:'Incidentes sem resolução',        br: makeBreak('sitesForaAtivos') },
+      { id:'hBacklog',lbl:'Backlog Total',        val: loading?'…':fmtN(totBacklog),  cor:'#ff8c00', sub:'Atividades aguardando execução',   br: makeBreak('backlogTotal') },
+      { id:'hFora',   lbl:'Fora do SLA',          val: loading?'…':fmtN(totForaSla),  cor:'#e74c3c', sub:'SLA já violado, ação imediata',    br: makeBreak('foraSla') },
+      { id:'hPred',   lbl:'Preditiva',             val: loading?'…':fmtN(totPreditiva),cor:'#f39c12', sub:'Próximas de violar o SLA',          br: makeBreak('preditiva') },
+      { id:'hSla',    lbl:'SLA Geral',             val: loading?'…':slaMedia.toFixed(1)+'%', cor:pctColor(slaMedia), sub:'Média ponderada (concluídas)', br: makeBreak('slaGeral') },
+      { id:'hIndef',  lbl:'Sem SLA Definido',     val: loading?'…':fmtN(totIndef),    cor:'#8a8a93', sub:'Backlog sem classificação de prazo', br: makeBreak('backlogIndef') }
+    ];
+
+    var row=document.getElementById('heroRow');
+    row.innerHTML='';
+    defs.forEach(function(d){
+      var div=document.createElement('div');
+      div.className='g-hero';
+      div.id=d.id;
+      div.style.borderColor='rgba(255,255,255,.06)';
+      div.innerHTML=
+        '<div class="g-hero-lbl">'+d.lbl+'</div>'+
+        '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>'+
+        '<div class="g-hero-sub">'+d.sub+'</div>'+
+        '<div class="g-hero-break">'+d.br+'</div>';
+      div.querySelector('::before');
+      div.style.setProperty('--hc',d.cor);
+      div.querySelector('.g-hero-val').parentElement.style.borderTopColor='rgba(255,255,255,.06)';
+      // Top accent via js since ::before needs CSS
+      var accent=document.createElement('div');
+      accent.style.cssText='position:absolute;top:0;left:0;right:0;height:3px;background:'+d.cor+';opacity:.7;border-radius:14px 14px 0 0;';
+      div.appendChild(accent);
+      row.appendChild(div);
+    });
+  }
+
+  /* ── DONUTS ───────────────────────────────────────────────── */
+  function renderDonuts(){
+    var el=document.getElementById('donutsRow');
+    el.innerHTML='';
+    CONTRACTS.forEach(function(c){
+      var K=ST[c.id].kpis||{};
+      var pct=nn(K.slaGeral), pc=pctColor(pct);
+
+      var div=document.createElement('div');
+      div.className='g-card g-donut-outer';
+      div.innerHTML=
+        '<div class="g-ct" style="align-self:flex-start">'+
+          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
+          c.name+' — SLA Geral'+
+        '</div>'+
+        '<div class="g-donut-ring"><canvas id="donut_'+c.id+'" width="148" height="148"></canvas>'+
+          '<div class="g-donut-mid">'+
+            '<div class="g-donut-pct" style="color:'+pc+'">'+pct.toFixed(1)+'%</div>'+
+            '<div class="g-donut-lbl">dentro do prazo</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="g-kpi-row">'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(K.backlogTotal)+'</div><div class="g-kpi-lbl">Backlog</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(K.foraSla)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#f39c12">'+fmtN(K.preditiva)+'</div><div class="g-kpi-lbl">Preditiva</div></div>'+
+        '</div>'+
+        '<div class="g-kpi-row" style="margin-top:8px">'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#8a8a93">'+fmtN(K.backlogIndef)+'</div><div class="g-kpi-lbl">Sem SLA</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(K.prodTotal)+'</div><div class="g-kpi-lbl">Concluídas</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+pc+'">'+fmtN(K.sitesForaAtivos)+'</div><div class="g-kpi-lbl">Sites Fora</div></div>'+
         '</div>';
       el.appendChild(div);
 
       destroyChart('donut_'+c.id);
-      charts['donut_'+c.id] = new Chart(document.getElementById('donut_'+c.id), {
-        type: 'doughnut',
-        data: {
-          datasets: [{
-            data: [pct, 100 - pct],
-            backgroundColor: [c.color, 'rgba(255,140,0,.06)'],
-            hoverBackgroundColor: [c.color, 'rgba(255,140,0,.06)'],
-            borderWidth: 0,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          cutout: '76%',
-          animation: { animateRotate: true, duration: 900 },
-          plugins: { legend: { display: false }, tooltip: { enabled: false } }
-        }
+      charts['donut_'+c.id]=new Chart(document.getElementById('donut_'+c.id),{
+        type:'doughnut',
+        data:{ datasets:[{ data:[pct,100-pct], backgroundColor:[c.color,'rgba(255,140,0,.06)'], hoverBackgroundColor:[c.color,'rgba(255,140,0,.06)'], borderWidth:0, borderRadius:4 }] },
+        options:{ cutout:'76%', animation:{animateRotate:true,duration:900}, plugins:{legend:{display:false},tooltip:{enabled:false}} }
       });
     });
   }
 
-  /* ── PRODUTIVIDADE ──────────────────────────────────────────── */
-  function renderProd(){
-    destroyChart('prod');
-    charts['prod'] = new Chart(document.getElementById('chartProd'), {
-      type: 'bar',
-      data: {
-        labels: C.map(function(c){ return c.name; }),
-        datasets: [
-          {
-            label: 'Dentro do SLA',
-            data: C.map(function(c){ return nn((ST[c.id].kpis||{}).prodDentro); }),
-            backgroundColor: 'rgba(46,204,113,.80)',
-            borderColor: '#2ecc71',
-            borderWidth: 1,
-            borderRadius: 5
-          },
-          {
-            label: 'Fora do SLA',
-            data: C.map(function(c){ return nn((ST[c.id].kpis||{}).prodFora); }),
-            backgroundColor: 'rgba(231,76,60,.75)',
-            borderColor: '#e74c3c',
-            borderWidth: 1,
-            borderRadius: 5
-          }
+  /* ── COMPOSIÇÃO DO BACKLOG (stacked) ──────────────────────── */
+  function renderBacklogComp(){
+    destroyChart('backlogComp');
+    var K=CONTRACTS.map(function(c){return ST[c.id].kpis||{};});
+    charts['backlogComp']=new Chart(document.getElementById('chartBacklogComp'),{
+      type:'bar',
+      data:{
+        labels:CONTRACTS.map(function(c){return c.name;}),
+        datasets:[
+          { label:'Fora do SLA',       data:K.map(function(k){return nn(k.foraSla);}),    backgroundColor:'rgba(231,76,60,.85)',   borderColor:'#e74c3c',  borderWidth:1, borderRadius:{topLeft:4,topRight:4} },
+          { label:'Preditiva',          data:K.map(function(k){return nn(k.preditiva);}),  backgroundColor:'rgba(243,156,18,.85)',  borderColor:'#f39c12',  borderWidth:1 },
+          { label:'Sem SLA Definido',   data:K.map(function(k){return nn(k.backlogIndef);}),backgroundColor:'rgba(138,138,147,.6)', borderColor:'#8a8a93',  borderWidth:1 },
+          { label:'Dentro do SLA',      data:K.map(function(k){return nn(k.dentroBl);}),   backgroundColor:'rgba(46,204,113,.80)',  borderColor:'#2ecc71',  borderWidth:1, borderRadius:{topLeft:4,topRight:4} }
         ]
       },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { grid: { color: 'rgba(255,140,0,.06)' }, ticks: { font: { size: 11 } } },
-          y: { grid: { display: false }, ticks: { font: { size: 14, weight: 'bold' }, color: '#f0f0f0' } }
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        scales:{
+          x:{ stacked:true, grid:{display:false}, ticks:{font:{size:13,weight:'bold'},color:'#f0f0f0'} },
+          y:{ stacked:true, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}} }
         },
-        plugins: {
-          legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 11 }, padding: 14 } },
-          datalabels: {
-            display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
-            anchor: 'end', align: 'end',
-            color: '#f0f0f0', font: { size: 12, weight: 'bold' },
-            formatter: function(v){ return v > 0 ? v.toLocaleString('pt-BR') : ''; },
-            padding: { left: 4 }
-          }
-        },
-        layout: { padding: { right: 60 } }
+        plugins:{
+          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+          tooltip:TT,
+          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, color:'#0a0a0f', font:{size:11,weight:'bold'}, formatter:function(v){return v>0?v:'';} }
+        }
       }
     });
   }
 
-  /* ── AGING DO BACKLOG ───────────────────────────────────────── */
-  function renderAging(){
-    destroyChart('aging');
-    var buckets = ['< 7 dias', '7 – 14 dias', '14 – 30 dias', '> 30 dias'];
-    var keys    = ['lt7', 'd7_14', 'd14_30', 'gt30'];
+  /* ── SLA POR PRIORIDADE ───────────────────────────────────── */
+  function renderSlaPrioridade(){
+    if(!allReady())return;
 
-    charts['aging'] = new Chart(document.getElementById('chartAging'), {
-      type: 'bar',
-      data: {
-        labels: buckets,
-        datasets: C.map(function(c){
+    /* Tabela */
+    var tbody=CONTRACTS.map(function(c){
+      var K=ST[c.id].kpis||{};
+      var sbp=K.slaByPriority||{};
+      var cells=PRIORIDADES.map(function(p){
+        var v=sbp[p];
+        if(v===null||v===undefined) return '<td class="no-data">—</td>';
+        var meta=META_PRIO[p]||70;
+        var ok=v>=meta;
+        var pc=pctColor(v);
+        var fill=Math.min(100,Math.max(0,v));
+        var metaFill=Math.min(100,meta);
+        return '<td>'+
+          '<span class="g-pct-pill" style="color:'+pc+';background:'+pctBg(v)+'">'+v.toFixed(1)+'%</span>'+
+          '<div class="g-meta-bar" style="width:100%;background:rgba(255,255,255,.08)">'+
+            '<div style="width:'+fill+'%;height:100%;background:'+pc+';border-radius:4px;position:relative">'+
+              '<div style="position:absolute;top:0;left:'+metaFill+'%;width:1px;height:100%;background:rgba(255,255,255,.4);"></div>'+
+            '</div>'+
+          '</div>'+
+        '</td>';
+      }).join('');
+      return '<tr>'+
+        '<td><span style="color:'+c.color+'">'+c.name+'</span></td>'+
+        cells+
+      '</tr>';
+    }).join('');
+
+    var theadCells=PRIORIDADES.map(function(p){
+      return '<th>'+p+'<span class="g-prazo-chip">'+PRAZO_LABELS[p]+'</span></th>';
+    }).join('');
+    document.getElementById('slaPrioTable').innerHTML=
+      '<table class="g-matrix">'+
+        '<thead><tr><th>Contrato</th>'+theadCells+'</tr></thead>'+
+        '<tbody>'+tbody+'</tbody>'+
+      '</table>';
+
+    /* Gráfico */
+    destroyChart('slaPrio');
+    charts['slaPrio']=new Chart(document.getElementById('chartSlaPrio'),{
+      type:'bar',
+      data:{
+        labels:PRIORIDADES.map(function(p){return p+' ('+PRAZO_LABELS[p]+')'}),
+        datasets: CONTRACTS.map(function(c){
+          var sbp=(ST[c.id].kpis||{}).slaByPriority||{};
           return {
-            label: c.name,
-            data: keys.map(function(k){ return nn(((ST[c.id].kpis||{aging:{}}).aging||{})[k]); }),
-            backgroundColor: c.alpha + '0.80)',
-            borderColor: c.color,
-            borderWidth: 1,
-            borderRadius: 5
+            label:c.name,
+            data:PRIORIDADES.map(function(p){return sbp[p]!==null?sbp[p]:null;}),
+            backgroundColor:c.alpha+'0.80)',
+            borderColor:c.color,
+            borderWidth:1, borderRadius:4
           };
         })
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 12 }, color: '#f0f0f0' } },
-          y: { grid: { color: 'rgba(255,140,0,.06)' }, ticks: { font: { size: 11 } } }
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        scales:{
+          x:{ grid:{display:false}, ticks:{font:{size:12},color:'#f0f0f0'} },
+          y:{ min:0, max:100, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11},callback:function(v){return v+'%';}} }
         },
-        plugins: {
-          legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 11 }, padding: 14 } },
-          datalabels: {
-            display: function(ctx){ return ctx.dataset.data[ctx.dataIndex] > 0; },
-            anchor: 'end', align: 'end',
-            color: '#f0f0f0', font: { size: 10, weight: 'bold' },
-            formatter: function(v){ return v > 0 ? v : ''; }
+        plugins:{
+          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+          tooltip:TT,
+          datalabels:{
+            display:function(ctx){return ctx.dataset.data[ctx.dataIndex]!=null;},
+            anchor:'end', align:'end', color:'#f0f0f0', font:{size:10,weight:'bold'},
+            formatter:function(v){return v!=null?v.toFixed(1)+'%':'';},
+            padding:{bottom:2}
           }
-        }
+        },
+        layout:{ padding:{ top:20 } }
       }
     });
   }
 
-  /* ── HELPER: cria card de região ─────────────────────────────── */
-  function makeSfCard(c){
-    var K = ST[c.id].kpis;
-    var div = document.createElement('div');
-    div.className = 'g-card';
-
-    if (!K || ST[c.id].error){
-      div.innerHTML =
-        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div>' +
-        '<div class="g-err">Sem dados disponíveis</div>';
-      return div;
-    }
-
-    var sf = K.sitesFora;
-    var regs = Object.keys(sf).sort(function(a,b){ return sf[b]-sf[a]; });
-
-    var h = Math.max(120, regs.length * 32);
-    div.innerHTML =
-      '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>' +
-        c.name+' — Sites Fora do SLA' +
-      '</div>' +
-      '<div class="g-chart-box" style="height:'+h+'px">' +
-        '<canvas id="sf_'+c.id+'"></canvas>' +
-      '</div>';
-
-    if (!regs.length){
-      div.querySelector('.g-chart-box').innerHTML =
-        '<div class="g-empty" style="padding-top:32px">✓ Nenhum site fora do SLA</div>';
-    }
-    return div;
-  }
-
-  function makeSrCard(c){
-    var K = ST[c.id].kpis;
-    var div = document.createElement('div');
-    div.className = 'g-card';
-
-    if (!K || ST[c.id].error){
-      div.innerHTML =
-        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div>' +
-        '<div class="g-err">Sem dados disponíveis</div>';
-      return div;
-    }
-
-    var sbr  = K.slaByRegion;
-    var regs = Object.keys(sbr).sort(function(a,b){
-      var pa = sbr[a].total > 0 ? sbr[a].dentro/sbr[a].total : 0;
-      var pb = sbr[b].total > 0 ? sbr[b].dentro/sbr[b].total : 0;
-      return pb - pa;
-    });
-
-    var h = Math.max(120, regs.length * 32);
-    div.innerHTML =
-      '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>' +
-        c.name+' — SLA por Região' +
-      '</div>' +
-      '<div class="g-chart-box" style="height:'+h+'px">' +
-        '<canvas id="sr_'+c.id+'"></canvas>' +
-      '</div>';
-
-    if (!regs.length){
-      div.querySelector('.g-chart-box').innerHTML =
-        '<div class="g-empty" style="padding-top:32px">Sem conclusões com dados de região</div>';
-    }
-    return div;
-  }
-
-  /* ── SITES FORA POR REGIÃO ──────────────────────────────────── */
-  function renderSitesFora(){
-    var row = document.getElementById('sitesForaRow');
-    row.innerHTML = '';
-    C.forEach(function(c){
-      var div = makeSfCard(c);
-      row.appendChild(div);
-
-      var K = ST[c.id].kpis;
-      if (!K || ST[c.id].error) return;
-      var sf   = K.sitesFora;
-      var regs = Object.keys(sf).sort(function(a,b){ return sf[b]-sf[a]; });
-      if (!regs.length) return;
-
-      destroyChart('sf_'+c.id);
-      charts['sf_'+c.id] = new Chart(document.getElementById('sf_'+c.id), {
-        type: 'bar',
-        data: {
-          labels: regs,
-          datasets: [{
-            label: 'Sites',
-            data: regs.map(function(r){ return sf[r]; }),
-            backgroundColor: c.alpha+'0.80)',
-            borderColor: c.color,
-            borderWidth: 1,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { grid: { color: 'rgba(255,140,0,.06)' }, ticks: { font: { size: 10 } } },
-            y: { grid: { display: false }, ticks: { font: { size: 12, weight: 'bold' }, color: '#f0f0f0' } }
-          },
-          plugins: {
-            legend: { display: false },
-            datalabels: {
-              display: true, anchor: 'end', align: 'end',
-              color: '#f0f0f0', font: { size: 11, weight: 'bold' },
-              formatter: function(v){ return v; },
-              padding: { left: 4 }
-            }
-          },
-          layout: { padding: { right: 28 } }
-        }
-      });
-    });
-  }
-
-  /* ── SLA POR REGIÃO ─────────────────────────────────────────── */
+  /* ── SLA POR REGIÃO ───────────────────────────────────────── */
   function renderSlaRegiao(){
-    var row = document.getElementById('slaRegiaoRow');
-    row.innerHTML = '';
-    C.forEach(function(c){
-      var div = makeSrCard(c);
+    if(!allReady())return;
+    var row=document.getElementById('slaRegiaoRow');
+    row.innerHTML='';
+    CONTRACTS.forEach(function(c){
+      var K=ST[c.id].kpis;
+      var div=document.createElement('div');
+      div.className='g-card';
+      if(!K||ST[c.id].error){
+        div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div><div class="g-err">Sem dados</div>';
+        row.appendChild(div); return;
+      }
+      var sbr=K.slaByRegion;
+      var regs=Object.keys(sbr).sort(function(a,b){
+        var pa=sbr[a].total>0?sbr[a].dentro/sbr[a].total:0;
+        var pb=sbr[b].total>0?sbr[b].dentro/sbr[b].total:0;
+        return pb-pa;
+      });
+      var h=Math.max(120,regs.length*32);
+      div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — SLA por Região</div>'+
+        '<div class="g-cbox" style="height:'+h+'px"><canvas id="sr_'+c.id+'"></canvas></div>';
+      if(!regs.length){ div.querySelector('.g-cbox').innerHTML='<div class="g-empty">Sem dados de conclusão por região</div>'; }
       row.appendChild(div);
-
-      var K = ST[c.id].kpis;
-      if (!K || ST[c.id].error) return;
-      var sbr  = K.slaByRegion;
-      var regs = Object.keys(sbr).sort(function(a,b){
-        var pa = sbr[a].total > 0 ? sbr[a].dentro/sbr[a].total : 0;
-        var pb = sbr[b].total > 0 ? sbr[b].dentro/sbr[b].total : 0;
-        return pb - pa;
-      });
-      if (!regs.length) return;
-
-      var pcts = regs.map(function(r){
-        return sbr[r].total > 0 ? Math.round(sbr[r].dentro/sbr[r].total*1000)/10 : 0;
-      });
-
+      if(!regs.length)return;
+      var pcts=regs.map(function(r){return sbr[r].total>0?Math.round(sbr[r].dentro/sbr[r].total*1000)/10:0;});
       destroyChart('sr_'+c.id);
-      charts['sr_'+c.id] = new Chart(document.getElementById('sr_'+c.id), {
-        type: 'bar',
-        data: {
-          labels: regs,
-          datasets: [{
-            label: '% SLA',
-            data: pcts,
-            backgroundColor: pcts.map(function(p){ return pctColor(p) === '#2ecc71' ? 'rgba(46,204,113,.80)' : (pctColor(p) === '#f39c12' ? 'rgba(243,156,18,.80)' : 'rgba(231,76,60,.80)'); }),
-            borderColor:     pcts.map(pctColor),
-            borderWidth: 1,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              min: 0, max: 100,
-              grid: { color: 'rgba(255,140,0,.06)' },
-              ticks: { font: { size: 10 }, callback: function(v){ return v+'%'; } }
-            },
-            y: { grid: { display: false }, ticks: { font: { size: 12, weight: 'bold' }, color: '#f0f0f0' } }
-          },
-          plugins: {
-            legend: { display: false },
-            datalabels: {
-              display: true, anchor: 'end', align: 'end',
-              color: '#f0f0f0', font: { size: 11, weight: 'bold' },
-              formatter: function(v){ return v.toFixed(1)+'%'; },
-              padding: { left: 4 }
-            }
-          },
-          layout: { padding: { right: 52 } }
-        }
+      charts['sr_'+c.id]=new Chart(document.getElementById('sr_'+c.id),{
+        type:'bar', data:{labels:regs,datasets:[{label:'%SLA',data:pcts,
+          backgroundColor:pcts.map(function(p){return p>=60?'rgba(46,204,113,.80)':(p>=35?'rgba(243,156,18,.80)':'rgba(231,76,60,.80)');}),
+          borderColor:pcts.map(pctColor),borderWidth:1,borderRadius:4}]},
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          scales:{ x:{min:0,max:100,grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:10},callback:function(v){return v+'%';}}},
+                   y:{grid:{display:false},ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'}} },
+          plugins:{ legend:{display:false}, tooltip:TT,
+            datalabels:{ display:true,anchor:'end',align:'end',color:'#f0f0f0',font:{size:11,weight:'bold'},
+              formatter:function(v){return v.toFixed(1)+'%';}, padding:{left:4} } },
+          layout:{padding:{right:54}} }
       });
     });
   }
 
-  /* ── BOOT ───────────────────────────────────────────────────── */
+  /* ── PRODUTIVIDADE ────────────────────────────────────────── */
+  function renderProd(){
+    destroyChart('prod');
+    charts['prod']=new Chart(document.getElementById('chartProd'),{
+      type:'bar',
+      data:{ labels:CONTRACTS.map(function(c){return c.name;}),
+        datasets:[
+          { label:'Dentro do SLA', data:CONTRACTS.map(function(c){return nn((ST[c.id].kpis||{}).prodDentro);}), backgroundColor:'rgba(46,204,113,.80)',  borderColor:'#2ecc71', borderWidth:1, borderRadius:5 },
+          { label:'Fora do SLA',   data:CONTRACTS.map(function(c){return nn((ST[c.id].kpis||{}).prodFora);}),   backgroundColor:'rgba(231,76,60,.75)',   borderColor:'#e74c3c', borderWidth:1, borderRadius:5 }
+        ]},
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        scales:{ x:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:11}}},
+                 y:{grid:{display:false},ticks:{font:{size:14,weight:'bold'},color:'#f0f0f0'}} },
+        plugins:{ legend:{position:'top',align:'end',labels:{boxWidth:10,font:{size:11},padding:14}}, tooltip:TT,
+          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, anchor:'end',align:'end',
+            color:'#f0f0f0',font:{size:12,weight:'bold'},formatter:function(v){return v>0?v.toLocaleString('pt-BR'):'';},padding:{left:4} } },
+        layout:{padding:{right:62}} }
+    });
+  }
+
+  /* ── AGING ────────────────────────────────────────────────── */
+  function renderAging(){
+    destroyChart('aging');
+    var buckets=['< 7 dias','7 – 14 dias','14 – 30 dias','> 30 dias'];
+    var keys=['lt7','d7_14','d14_30','gt30'];
+    charts['aging']=new Chart(document.getElementById('chartAging'),{
+      type:'bar',
+      data:{ labels:buckets, datasets:CONTRACTS.map(function(c){
+        return { label:c.name, data:keys.map(function(k){return nn(((ST[c.id].kpis||{aging:{}}).aging||{})[k]);}),
+          backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5 };
+      })},
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ x:{grid:{display:false},ticks:{font:{size:12},color:'#f0f0f0'}},
+                 y:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:11}}} },
+        plugins:{ legend:{position:'top',align:'end',labels:{boxWidth:10,font:{size:11},padding:14}}, tooltip:TT,
+          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, anchor:'end',align:'end',
+            color:'#f0f0f0',font:{size:10,weight:'bold'},formatter:function(v){return v>0?v:'';} } } }
+    });
+  }
+
+  /* ── SITES FORA POR REGIÃO ────────────────────────────────── */
+  function renderSitesFora(){
+    var row=document.getElementById('sitesForaRow');
+    row.innerHTML='';
+    CONTRACTS.forEach(function(c){
+      var K=ST[c.id].kpis;
+      var div=document.createElement('div');
+      div.className='g-card';
+      if(!K||ST[c.id].error){
+        div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div><div class="g-err">Sem dados</div>';
+        row.appendChild(div); return;
+      }
+      var sf=K.sitesFora;
+      var regs=Object.keys(sf).sort(function(a,b){return sf[b]-sf[a];});
+      var h=Math.max(120,regs.length*32);
+      div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Sites Fora do SLA</div>'+
+        '<div class="g-cbox" style="height:'+h+'px"><canvas id="sf_'+c.id+'"></canvas></div>';
+      if(!regs.length){div.querySelector('.g-cbox').innerHTML='<div class="g-empty" style="padding-top:30px">✓ Nenhum site fora do SLA</div>';}
+      row.appendChild(div);
+      if(!regs.length)return;
+      destroyChart('sf_'+c.id);
+      charts['sf_'+c.id]=new Chart(document.getElementById('sf_'+c.id),{
+        type:'bar', data:{labels:regs,datasets:[{label:'Sites',data:regs.map(function(r){return sf[r];}),
+          backgroundColor:c.alpha+'0.80)',borderColor:c.color,borderWidth:1,borderRadius:4}]},
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          scales:{ x:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:10}}},
+                   y:{grid:{display:false},ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'}} },
+          plugins:{ legend:{display:false}, tooltip:TT,
+            datalabels:{display:true,anchor:'end',align:'end',color:'#f0f0f0',font:{size:11,weight:'bold'},
+              formatter:function(v){return v;},padding:{left:4}} },
+          layout:{padding:{right:28}} }
+      });
+    });
+  }
+
+  /* ── BOOT ─────────────────────────────────────────────────── */
+  window.switchTab = switchTab;
+  window.loadAll   = loadAll;
   renderStrips();
+  renderHeroKpis();
   loadAll();
 
 })();
