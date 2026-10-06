@@ -12,7 +12,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
   <style>
-    /* ── TEMA TRJ / TMG / TNE ─────────────────────────────────── */
     :root {
       --bg:      #0a0a0f;
       --card:    #13131a;
@@ -44,7 +43,6 @@
     ::-webkit-scrollbar-thumb { background: rgba(255,140,0,.25); border-radius: 6px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,140,0,.45); }
 
-    /* ── LAYOUT ─────────────────────────────────────────────── */
     .g-wrap { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
 
     /* Header */
@@ -112,14 +110,13 @@
     .g-2col { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
     .g-6col { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; }
 
-    /* ── HERO KPI TILES ──────────────────────────────────────── */
+    /* Hero KPI tiles */
     .g-hero {
       background: var(--card); border: 1px solid var(--border); border-radius: 14px;
       padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
       position: relative; overflow: hidden;
       transition: border-color .25s ease, box-shadow .25s ease, transform .2s ease;
     }
-    .g-hero::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
     .g-hero:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,.45); }
     .g-hero-lbl { font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
     .g-hero-val { font-family: 'Sora', sans-serif; font-size: 36px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
@@ -133,7 +130,17 @@
       background: rgba(255,255,255,.05); letter-spacing: .5px;
     }
 
-    /* ── CONTRACT STRIPS ──────────────────────────────────────── */
+    /* Filter bar */
+    .g-filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+    .g-filter-lbl { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; margin-right: 4px; }
+    .g-filter-btn {
+      padding: 5px 16px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      border-radius: 20px; border: 1.5px solid rgba(255,255,255,.1); background: transparent;
+      color: var(--muted); cursor: pointer; transition: all .15s;
+    }
+    .g-filter-btn:hover { color: var(--fg); border-color: rgba(255,255,255,.3); }
+
+    /* Contract strips */
     .g-strip {
       background: var(--card); border: 1px solid var(--border); border-left-width: 3px;
       border-radius: 12px; padding: 14px 18px; display: flex; align-items: center;
@@ -146,7 +153,7 @@
     .g-strip-ts   { font-size: 11px; color: var(--muted); text-align: right; margin-top: 3px; }
     .g-strip-st   { font-size: 11px; font-weight: 700; }
 
-    /* ── DONUT ────────────────────────────────────────────────── */
+    /* Donut */
     .g-donut-outer { display: flex; flex-direction: column; align-items: center; }
     .g-donut-ring  { position: relative; width: 148px; height: 148px; }
     .g-donut-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
@@ -157,16 +164,16 @@
     .g-kpi-val { font-family: 'Sora', sans-serif; font-size: 18px; font-weight: 800; line-height: 1; }
     .g-kpi-lbl { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 3px; }
 
-    /* ── CHART BOX ────────────────────────────────────────────── */
+    /* Chart box */
     .g-cbox { position: relative; }
 
-    /* ── SKELETON / ESTADO ────────────────────────────────────── */
+    /* States */
     .g-skel { background: linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
     @keyframes shimmer { to { background-position: -200% 0; } }
     .g-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 24px 0; }
     .g-err   { color: var(--red);   font-size: 12px; text-align: center; padding: 24px 0; }
 
-    /* ── MATRIX (SLA por prioridade) ──────────────────────────── */
+    /* Matrix */
     .g-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
     .g-matrix th { padding: 10px 14px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; text-align: center; border-bottom: 1px solid var(--border); }
     .g-matrix th:first-child { text-align: left; }
@@ -178,7 +185,7 @@
     .g-meta-bar { height: 4px; border-radius: 4px; margin-top: 6px; }
     .g-matrix td.no-data { color: var(--muted); font-size: 11px; }
 
-    /* ── RESPONSIVE ────────────────────────────────────────────── */
+    /* Responsive */
     @media (max-width: 1100px) { .g-6col { grid-template-columns: repeat(3,1fr); } }
     @media (max-width: 960px)  { .g-3col, .g-6col { grid-template-columns: 1fr; } .g-2col { grid-template-columns: 1fr; } }
     @media (max-width: 700px)  { .g-main { padding: 14px; } .g-hdr { padding: 12px 14px; flex-wrap: wrap; gap: 8px; } .g-tabs-nav { padding: 0 14px; } }
@@ -187,7 +194,7 @@
 <body>
 <div class="g-wrap">
 
-<!-- ── HEADER ─────────────────────────────────────────────── -->
+<!-- HEADER -->
 <header class="g-hdr">
   <div class="g-hdr-l">
     <span class="g-badge">Gerencial</span>
@@ -207,7 +214,7 @@
   </div>
 </header>
 
-<!-- ── TABS ────────────────────────────────────────────────── -->
+<!-- TABS -->
 <nav class="g-tabs-nav">
   <button id="btn-exec" class="g-tab-btn active" onclick="switchTab('exec')">
     <span class="g-tab-dot"></span>Painel Executivo
@@ -220,49 +227,33 @@
   </button>
 </nav>
 
-<!-- ══════════════════════════════════════════════════════════
-     TAB 1 — PAINEL EXECUTIVO
-══════════════════════════════════════════════════════════ -->
+<!-- TAB 1 — PAINEL EXECUTIVO -->
 <div id="tab-exec" class="g-tab-pane active">
 <div class="g-main">
 
-  <!-- HERO KPIs -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Consolidado Geral — Todos os Contratos</div>
+    <div class="g-filter-bar" id="filterBar"></div>
     <div class="g-6col" id="heroRow"></div>
   </div>
 
-  <!-- STRIPS -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Status dos Contratos</div>
     <div class="g-3col" id="strips"></div>
   </div>
 
-  <!-- DONUTS -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>SLA Geral — % Concluídas Dentro do Prazo</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>SLA Geral — Dentro e Fora do Prazo</div>
     <div class="g-3col" id="donutsRow"></div>
   </div>
 
-  <!-- COMPOSIÇÃO DO BACKLOG -->
-  <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Composição do Backlog por Contrato</div>
-    <div class="g-card">
-      <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Distribuição do backlog ativo por situação de SLA</div>
-      <div class="g-cbox" style="height:120px;"><canvas id="chartBacklogComp"></canvas></div>
-    </div>
-  </div>
-
 </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════
-     TAB 2 — SLA & ADERÊNCIA
-══════════════════════════════════════════════════════════ -->
+<!-- TAB 2 — SLA & ADERÊNCIA -->
 <div id="tab-sla" class="g-tab-pane">
 <div class="g-main">
 
-  <!-- SLA POR PRIORIDADE — tabela + barras -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>SLA por Prioridade — % Concluídas Dentro do Prazo</div>
     <div class="g-card">
@@ -272,22 +263,18 @@
     </div>
   </div>
 
-  <!-- SLA POR REGIÃO -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>SLA por Região — % Dentro do Prazo (concluídas)</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>SLA por Região — Concluídas Dentro e Fora do Prazo</div>
     <div class="g-3col" id="slaRegiaoRow"></div>
   </div>
 
 </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════
-     TAB 3 — OPERACIONAL
-══════════════════════════════════════════════════════════ -->
+<!-- TAB 3 — OPERACIONAL -->
 <div id="tab-op" class="g-tab-pane">
 <div class="g-main">
 
-  <!-- PRODUTIVIDADE -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Produtividade — Encerradas Dentro / Fora do SLA</div>
     <div class="g-card">
@@ -296,18 +283,16 @@
     </div>
   </div>
 
-  <!-- AGING DO BACKLOG -->
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Aging do Backlog — Tempo em Aberto</div>
     <div class="g-card">
       <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Distribuição do backlog por faixa de idade</div>
-      <div class="g-cbox" style="height:170px;"><canvas id="chartAging"></canvas></div>
+      <div class="g-cbox" style="height:220px;"><canvas id="chartAging"></canvas></div>
     </div>
   </div>
 
-  <!-- SITES FORA POR REGIÃO -->
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Sites Fora do SLA por Região (backlog)</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Sites Ativos por Região (em campo no momento)</div>
     <div class="g-3col" id="sitesForaRow"></div>
   </div>
 
@@ -323,7 +308,6 @@
   Chart.register(ChartDataLabels);
   Chart.defaults.set('plugins.datalabels', { display: false });
 
-  /* ── TOOLTIP STYLE global ─────────────────────────────────── */
   var TT = { backgroundColor:'#1a1a24', titleColor:'#ff8c00', bodyColor:'#f0f0f0', borderColor:'rgba(255,140,0,.4)', borderWidth:1, padding:10, cornerRadius:8 };
 
   /* ── CONTRATOS ────────────────────────────────────────────── */
@@ -355,6 +339,20 @@
   var PRAZO_LABELS = { P1:'4h', P2:'6h', P3:'12h', P4:'24h', P5:'48h' };
   var META_PRIO = { P1:80, P2:75, P3:70, P4:70, P5:70 };
 
+  /* Aging — 9 faixas idênticas aos dashboards públicos (em minutos) */
+  var AGING_BUCKETS = [
+    { label:'Até 4h',    min:0,    max:240      },
+    { label:'4h a 6h',   min:240,  max:360      },
+    { label:'6h a 8h',   min:360,  max:480      },
+    { label:'8h a 12h',  min:480,  max:720      },
+    { label:'12h a 24h', min:720,  max:1440     },
+    { label:'24h a 48h', min:1440, max:2880     },
+    { label:'48h a 72h', min:2880, max:4320     },
+    { label:'72h a 96h', min:4320, max:5760     },
+    { label:'>96h',      min:5760, max:Infinity }
+  ];
+  var AGING_CORES = ['#2ecc71','#52d68a','#ffb347','#ff9f1c','#ff8c00','#ff6b35','#e74c3c','#c0392b','#922b21'];
+
   /* ── STATE ────────────────────────────────────────────────── */
   var ST = {};
   CONTRACTS.forEach(function(c){ ST[c.id]={ loading:true, kpis:null, savedAt:null, error:null }; });
@@ -362,23 +360,56 @@
   var charts = {};
   var currentTab = 'exec';
   var renderedTabs = {};
+  var contractFilter = null;
+
+  /* ── UTILS ────────────────────────────────────────────────── */
+  function nn(n){ return n==null?0:n; }
+  function fmtN(n){ return nn(n).toLocaleString('pt-BR'); }
+  function fmtDt(iso){
+    if(!iso) return '—';
+    try{ return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return '—'; }
+  }
+  function pctColor(p){ return p>=60?'#2ecc71':(p>=35?'#f39c12':'#e74c3c'); }
+  function pctBg(p){ return p>=60?'rgba(46,204,113,.12)':(p>=35?'rgba(243,156,18,.12)':'rgba(231,76,60,.12)'); }
+  function allReady(){ return CONTRACTS.every(function(c){ return !ST[c.id].loading; }); }
+  function destroyChart(id){ if(charts[id]){ try{ charts[id].destroy(); }catch(e){} charts[id]=null; } }
+
+  /* Robust date parser — handles ISO and dd/mm/yyyy */
+  function safeDate(s){
+    if(!s) return null;
+    var d = new Date(s);
+    if(!isNaN(d.getTime())) return d;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m){ var d2=new Date(+m[3],+m[2]-1,+m[1]); if(!isNaN(d2.getTime())) return d2; }
+    /* Try numeric timestamp */
+    var n = Number(s);
+    if(!isNaN(n) && n > 1e9){ var d3=new Date(n); if(!isNaN(d3.getTime())) return d3; }
+    return null;
+  }
+
+  Chart.defaults.color = '#8a8a93';
+  Chart.defaults.borderColor = 'rgba(255,140,0,.07)';
+  Chart.defaults.font.family = "ui-sans-serif,system-ui,'Segoe UI',sans-serif";
+  Chart.defaults.font.size = 12;
 
   /* ── COMPUTE ──────────────────────────────────────────────── */
   function computeKpis(tasks, incidents, regionFn) {
-    var Z = { backlogTotal:0, foraSla:0, preditiva:0, dentroBl:0, backlogIndef:0,
-               prodTotal:0, prodDentro:0, prodFora:0, slaGeral:0, sitesForaAtivos:0,
-               aging:{lt7:0,d7_14:0,d14_30:0,gt30:0},
-               sitesFora:{}, slaByRegion:{},
-               slaByPriority:{P1:null,P2:null,P3:null,P4:null,P5:null} };
-    if (!Array.isArray(tasks)||!tasks.length) return Z;
+    var Z = {
+      backlogTotal:0, foraSla:0, preditiva:0, dentroBl:0, backlogIndef:0,
+      prodTotal:0, prodDentro:0, prodFora:0, slaGeral:0, sitesForaAtivos:0,
+      aging: AGING_BUCKETS.map(function(){ return 0; }),
+      slaByRegion:{}, incidentsByRegion:{},
+      slaByPriority:{P1:null,P2:null,P3:null,P4:null,P5:null}
+    };
+    if(!Array.isArray(tasks) || !tasks.length) return Z;
 
     var now = Date.now();
     var backlog=[], completed=[];
     tasks.forEach(function(t){
       var fim    = (t.fimCalc||'').toString().trim();
       var motivo = (t.motivoCancelamento||'').toString().trim();
-      if (fim) completed.push(t);
-      else if (!motivo) backlog.push(t);
+      if(fim) completed.push(t);
+      else if(!motivo) backlog.push(t);
     });
 
     var foraSla   = backlog.filter(function(t){ return t.statusSla==='FORA DO SLA'; }).length;
@@ -388,63 +419,65 @@
       var s=(t.statusSla||'').trim();
       return !s||(s!=='FORA DO SLA'&&s!=='DENTRO DO SLA'&&s!=='PREDITIVA');
     }).length;
+
     var prodDentro = completed.filter(function(t){ return t.statusSla==='DENTRO DO SLA'; }).length;
     var slaGeral   = completed.length>0 ? Math.round(prodDentro/completed.length*1000)/10 : 0;
 
-    /* Aging */
-    var aging={lt7:0,d7_14:0,d14_30:0,gt30:0};
+    /* Aging — dataCriacaoAS em minutos, 9 faixas (igual aos dashboards públicos) */
+    var aging = AGING_BUCKETS.map(function(){ return 0; });
     backlog.forEach(function(t){
-      if (!t.createdAt){aging.gt30++;return;}
-      var d=(now-new Date(t.createdAt).getTime())/86400000;
-      if(d<7)aging.lt7++; else if(d<14)aging.d7_14++; else if(d<30)aging.d14_30++; else aging.gt30++;
+      var raw = t.dataCriacaoAS || t.createdAt;
+      var dt  = safeDate(raw);
+      if(!dt || isNaN(dt.getTime())) return;
+      var mins = Math.round((now - dt.getTime()) / 60000);
+      if(mins < 0) return;
+      var idx = AGING_BUCKETS.findIndex(function(b){ return mins >= b.min && mins < b.max; });
+      if(idx >= 0) aging[idx]++;
     });
 
-    /* Sites fora por região (distinct enderecoId no backlog com foraSla) */
-    var sfMap={};
-    backlog.forEach(function(t){
-      if(t.statusSla!=='FORA DO SLA')return;
-      var r=regionFn(t);
-      if(!sfMap[r])sfMap[r]=new Set();
-      sfMap[r].add(t.enderecoId||t.osNumero||Math.random());
-    });
-    var sitesFora={};
-    Object.keys(sfMap).forEach(function(r){ sitesFora[r]=sfMap[r].size; });
-
-    /* SLA por região (concluídas) */
+    /* SLA por região (concluídas) — expõe dentro, fora e total */
     var slaByRegion={};
     completed.forEach(function(t){
-      var r=regionFn(t);
-      if(!slaByRegion[r])slaByRegion[r]={dentro:0,total:0};
+      var r = regionFn(t);
+      if(!slaByRegion[r]) slaByRegion[r]={dentro:0,fora:0,total:0};
       slaByRegion[r].total++;
-      if(t.statusSla==='DENTRO DO SLA')slaByRegion[r].dentro++;
+      if(t.statusSla==='DENTRO DO SLA') slaByRegion[r].dentro++;
+      else                               slaByRegion[r].fora++;
     });
 
     /* SLA por prioridade (concluídas) */
     var prioMap={};
-    PRIORIDADES.forEach(function(p){prioMap[p]={dentro:0,total:0};});
+    PRIORIDADES.forEach(function(p){ prioMap[p]={dentro:0,total:0}; });
     completed.forEach(function(t){
       var p=(t.prioridade||'').trim().toUpperCase();
-      if(!prioMap[p])return;
+      if(!prioMap[p]) return;
       prioMap[p].total++;
-      if(t.statusSla==='DENTRO DO SLA')prioMap[p].dentro++;
+      if(t.statusSla==='DENTRO DO SLA') prioMap[p].dentro++;
     });
     var slaByPriority={};
     PRIORIDADES.forEach(function(p){
       var r=prioMap[p];
-      slaByPriority[p]=r.total>0?Math.round(r.dentro/r.total*1000)/10:null;
+      slaByPriority[p] = r.total>0 ? Math.round(r.dentro/r.total*1000)/10 : null;
     });
 
-    /* Sites fora ativos (incidentsEnriched) */
-    var sitesForaAtivos=(incidents||[]).filter(function(i){
-      return (i.statusTrat||'ATIVO').toUpperCase()!=='RESOLVIDO';
-    }).length;
+    /* Sites ativos por região — todos os incidents não resolvidos */
+    var sitesForaAtivos=0, incByReg={};
+    (incidents||[]).forEach(function(i){
+      if((i.statusTrat||'ATIVO').toUpperCase()==='RESOLVIDO') return;
+      sitesForaAtivos++;
+      var r = regionFn(i);
+      if(!incByReg[r]) incByReg[r]=0;
+      incByReg[r]++;
+    });
 
     return {
       backlogTotal:backlog.length, foraSla:foraSla, preditiva:preditiva,
       dentroBl:dentroBl, backlogIndef:indef,
       prodTotal:completed.length, prodDentro:prodDentro, prodFora:completed.length-prodDentro,
       slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
-      aging:aging, sitesFora:sitesFora, slaByRegion:slaByRegion, slaByPriority:slaByPriority
+      aging:aging,
+      slaByRegion:slaByRegion, incidentsByRegion:incByReg,
+      slaByPriority:slaByPriority
     };
   }
 
@@ -453,47 +486,32 @@
     ST[c.id].loading=true;
     renderStrips();
     fetch(c.url+'?action=getDashboardSnapshot&_t='+Date.now(),{cache:'no-store'})
-      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(res){
-        if(!res.ok)throw new Error(res.error||'Resposta inválida');
-        var tasks=(res.data&&res.data.tasksEnriched)?res.data.tasksEnriched:[];
-        var incs =(res.data&&res.data.incidentsEnriched)?res.data.incidentsEnriched:[];
-        ST[c.id]={loading:false,kpis:computeKpis(tasks,incs,c.region),savedAt:res.savedAt||null,error:null};
+        if(!res.ok) throw new Error(res.error||'Resposta inválida');
+        var tasks = (res.data&&res.data.tasksEnriched) ? res.data.tasksEnriched : [];
+        var incs  = (res.data&&res.data.incidentsEnriched) ? res.data.incidentsEnriched : [];
+        ST[c.id]={ loading:false, kpis:computeKpis(tasks,incs,c.region), savedAt:res.savedAt||null, error:null };
         render();
       })
       .catch(function(err){
-        ST[c.id]={loading:false,kpis:null,savedAt:null,error:err.message||'Erro'};
+        ST[c.id]={ loading:false, kpis:null, savedAt:null, error:err.message||'Erro' };
         render();
       });
   }
+
   function loadAll(){
     document.getElementById('tsEl').textContent='—';
     renderedTabs={};
+    contractFilter=null;
     CONTRACTS.forEach(fetchOne);
   }
-
-  /* ── UTILS ────────────────────────────────────────────────── */
-  function nn(n){return n==null?0:n;}
-  function fmtN(n){return nn(n).toLocaleString('pt-BR');}
-  function fmtDt(iso){
-    if(!iso)return'—';
-    try{return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return'—';}
-  }
-  function pctColor(p){return p>=60?'#2ecc71':(p>=35?'#f39c12':'#e74c3c');}
-  function pctBg(p){return p>=60?'rgba(46,204,113,.12)':(p>=35?'rgba(243,156,18,.12)':'rgba(231,76,60,.12)');}
-  function allReady(){return CONTRACTS.every(function(c){return!ST[c.id].loading;});}
-  function destroyChart(id){if(charts[id]){try{charts[id].destroy();}catch(e){}charts[id]=null;}}
-
-  Chart.defaults.color='#8a8a93';
-  Chart.defaults.borderColor='rgba(255,140,0,.07)';
-  Chart.defaults.font.family="ui-sans-serif,system-ui,'Segoe UI',sans-serif";
-  Chart.defaults.font.size=12;
 
   /* ── TAB SWITCHING ────────────────────────────────────────── */
   function switchTab(id){
     currentTab=id;
-    document.querySelectorAll('.g-tab-btn').forEach(function(b){b.classList.remove('active');});
-    document.querySelectorAll('.g-tab-pane').forEach(function(p){p.classList.remove('active');});
+    document.querySelectorAll('.g-tab-btn').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.g-tab-pane').forEach(function(p){ p.classList.remove('active'); });
     document.getElementById('btn-'+id).classList.add('active');
     document.getElementById('tab-'+id).classList.add('active');
     if(allReady()&&!renderedTabs[id]){ renderTabContent(id); renderedTabs[id]=true; }
@@ -502,28 +520,52 @@
   /* ── RENDER PRINCIPAL ─────────────────────────────────────── */
   function render(){
     renderStrips();
+    renderFilterButtons();
     renderHeroKpis();
-    if(!allReady())return;
+    if(!allReady()) return;
     renderTabContent(currentTab);
     renderedTabs[currentTab]=true;
-    document.getElementById('tsEl').textContent=
+    document.getElementById('tsEl').textContent =
       'Atualizado '+new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   }
 
   function renderTabContent(tab){
-    if(tab==='exec'){ renderDonuts(); renderBacklogComp(); }
-    else if(tab==='sla'){ renderSlaPrioridade(); renderSlaRegiao(); }
-    else if(tab==='op'){ renderProd(); renderAging(); renderSitesFora(); }
+    if(tab==='exec')      { renderDonuts(); }
+    else if(tab==='sla')  { renderSlaPrioridade(); renderSlaRegiao(); }
+    else if(tab==='op')   { renderProd(); renderAging(); renderSitesFora(); }
+  }
+
+  /* ── FILTER BUTTONS ───────────────────────────────────────── */
+  function renderFilterButtons(){
+    var bar = document.getElementById('filterBar');
+    if(!bar) return;
+    var all = [{id:null,name:'Todos',color:'#ff8c00'}].concat(
+      CONTRACTS.map(function(c){ return {id:c.id,name:c.name,color:c.color}; })
+    );
+    bar.innerHTML = '<span class="g-filter-lbl">Filtrar:</span>' +
+      all.map(function(b){
+        var active = contractFilter===b.id;
+        var style = active
+          ? 'background:'+b.color+';border-color:'+b.color+';color:#111;font-weight:800;box-shadow:0 0 10px '+b.color+'70;'
+          : 'border-color:'+b.color+'55;color:'+b.color+';';
+        return '<button class="g-filter-btn" style="'+style+'" onclick="setContractFilter('+(b.id===null?'null':"'"+b.id+"'")+')">'+b.name+'</button>';
+      }).join('');
+  }
+
+  function setContractFilter(id){
+    contractFilter = id;
+    renderFilterButtons();
+    renderHeroKpis();
   }
 
   /* ── STRIPS ───────────────────────────────────────────────── */
   function renderStrips(){
-    document.getElementById('strips').innerHTML=CONTRACTS.map(function(c){
+    document.getElementById('strips').innerHTML = CONTRACTS.map(function(c){
       var s=ST[c.id];
-      var dc=s.loading?'#f39c12':(s.error?'#e74c3c':'#2ecc71');
-      var tx=s.loading?'Carregando':(s.error?'Offline':'Online');
-      var lnk=c.dash?
-        ' <a href="'+c.dash+'" target="_blank" style="font-size:10px;color:var(--muted);margin-left:6px;opacity:.6;text-decoration:none;">↗</a>':'';
+      var dc = s.loading?'#f39c12':(s.error?'#e74c3c':'#2ecc71');
+      var tx = s.loading?'Carregando':(s.error?'Offline':'Online');
+      var lnk = c.dash
+        ? ' <a href="'+c.dash+'" target="_blank" style="font-size:10px;color:var(--muted);margin-left:6px;opacity:.6;text-decoration:none;">↗</a>' : '';
       return '<div class="g-strip" style="border-left-color:'+c.color+'">'+
         '<div>'+
           '<div class="g-strip-name" style="color:'+c.color+'">'+c.name+lnk+'</div>'+
@@ -542,151 +584,133 @@
 
   /* ── HERO KPIs ────────────────────────────────────────────── */
   function renderHeroKpis(){
-    var loading=!allReady();
-    var totSitesF=0, totBacklog=0, totForaSla=0, totPreditiva=0, totIndef=0, totProd=0;
-    var slaVals=[]; var slaWeights=[];
-    CONTRACTS.forEach(function(c){
-      var K=ST[c.id].kpis||{};
-      totSitesF  +=nn(K.sitesForaAtivos);
-      totBacklog +=nn(K.backlogTotal);
-      totForaSla +=nn(K.foraSla);
-      totPreditiva+=nn(K.preditiva);
-      totIndef   +=nn(K.backlogIndef);
-      totProd    +=nn(K.prodTotal);
-      if(K.prodTotal>0){slaVals.push(K.slaGeral*K.prodTotal);slaWeights.push(K.prodTotal);}
+    var loading = !allReady();
+    var totSitesF=0, totBacklog=0, totForaSla=0, totPreditiva=0, totIndef=0;
+    var slaVals=[], slaWeights=[];
+    var filtered = contractFilter
+      ? CONTRACTS.filter(function(c){ return c.id===contractFilter; })
+      : CONTRACTS;
+
+    filtered.forEach(function(c){
+      var K = ST[c.id].kpis||{};
+      totSitesF   += nn(K.sitesForaAtivos);
+      totBacklog  += nn(K.backlogTotal);
+      totForaSla  += nn(K.foraSla);
+      totPreditiva+= nn(K.preditiva);
+      totIndef    += nn(K.backlogIndef);
+      if(K.prodTotal>0){ slaVals.push(K.slaGeral*K.prodTotal); slaWeights.push(K.prodTotal); }
     });
-    var totWeight=slaWeights.reduce(function(a,b){return a+b;},0);
-    var slaMedia=totWeight>0?Math.round(slaVals.reduce(function(a,b){return a+b;},0)/totWeight*10)/10:0;
+    var totWeight = slaWeights.reduce(function(a,b){ return a+b; },0);
+    var slaMedia  = totWeight>0 ? Math.round(slaVals.reduce(function(a,b){ return a+b; },0)/totWeight*10)/10 : 0;
 
     function makeBreak(field){
-      return CONTRACTS.map(function(c){
-        var K=ST[c.id].kpis||{};
-        var v=K[field];
-        if(v==null&&field==='slaGeral')v=K.slaGeral;
-        return '<span class="g-hero-chip" style="color:'+c.color+'">'+c.name+' '+(loading?'…':(field==='slaGeral'?nn(K.slaGeral).toFixed(1)+'%':fmtN(K[field])))+'</span>';
+      return filtered.map(function(c){
+        var K = ST[c.id].kpis||{};
+        var v = loading ? '…' : (field==='slaGeral' ? nn(K.slaGeral).toFixed(1)+'%' : fmtN(K[field]));
+        return '<span class="g-hero-chip" style="color:'+c.color+'">'+c.name+' '+v+'</span>';
       }).join('');
     }
 
     var defs=[
-      { id:'hSites',  lbl:'Sites Fora Ativos',  val: loading?'…':fmtN(totSitesF),   cor:'#e74c3c', sub:'Incidentes sem resolução',        br: makeBreak('sitesForaAtivos') },
-      { id:'hBacklog',lbl:'Backlog Total',        val: loading?'…':fmtN(totBacklog),  cor:'#ff8c00', sub:'Atividades aguardando execução',   br: makeBreak('backlogTotal') },
-      { id:'hFora',   lbl:'Fora do SLA',          val: loading?'…':fmtN(totForaSla),  cor:'#e74c3c', sub:'SLA já violado, ação imediata',    br: makeBreak('foraSla') },
-      { id:'hPred',   lbl:'Preditiva',             val: loading?'…':fmtN(totPreditiva),cor:'#f39c12', sub:'Próximas de violar o SLA',          br: makeBreak('preditiva') },
-      { id:'hSla',    lbl:'SLA Geral',             val: loading?'…':slaMedia.toFixed(1)+'%', cor:pctColor(slaMedia), sub:'Média ponderada (concluídas)', br: makeBreak('slaGeral') },
-      { id:'hIndef',  lbl:'Sem SLA Definido',     val: loading?'…':fmtN(totIndef),    cor:'#8a8a93', sub:'Backlog sem classificação de prazo', br: makeBreak('backlogIndef') }
+      { id:'hSites',  lbl:'Sites Fora Ativos',  val:loading?'…':fmtN(totSitesF),          cor:'#e74c3c', sub:'Incidentes sem resolução',         br:makeBreak('sitesForaAtivos') },
+      { id:'hBacklog',lbl:'Backlog Total',        val:loading?'…':fmtN(totBacklog),         cor:'#ff8c00', sub:'Atividades aguardando execução',    br:makeBreak('backlogTotal') },
+      { id:'hFora',   lbl:'Fora do SLA',          val:loading?'…':fmtN(totForaSla),         cor:'#e74c3c', sub:'SLA já violado, ação imediata',     br:makeBreak('foraSla') },
+      { id:'hPred',   lbl:'Preditiva',             val:loading?'…':fmtN(totPreditiva),       cor:'#f39c12', sub:'Próximas de violar o SLA',           br:makeBreak('preditiva') },
+      { id:'hSla',    lbl:'SLA Geral',             val:loading?'…':slaMedia.toFixed(1)+'%', cor:'#2ecc71', sub:'Concluídas dentro do prazo',         br:makeBreak('slaGeral') },
+      { id:'hIndef',  lbl:'Sem SLA Definido',     val:loading?'…':fmtN(totIndef),           cor:'#8a8a93', sub:'Backlog sem classificação de prazo', br:makeBreak('backlogIndef') }
     ];
 
-    var row=document.getElementById('heroRow');
+    var row = document.getElementById('heroRow');
     row.innerHTML='';
     defs.forEach(function(d){
-      var div=document.createElement('div');
-      div.className='g-hero';
-      div.id=d.id;
-      div.style.borderColor='rgba(255,255,255,.06)';
-      div.innerHTML=
+      var div = document.createElement('div');
+      div.className = 'g-hero';
+      div.id = d.id;
+      div.style.borderColor = 'rgba(255,255,255,.06)';
+      div.innerHTML =
         '<div class="g-hero-lbl">'+d.lbl+'</div>'+
         '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>'+
         '<div class="g-hero-sub">'+d.sub+'</div>'+
         '<div class="g-hero-break">'+d.br+'</div>';
-      div.querySelector('::before');
-      div.style.setProperty('--hc',d.cor);
-      div.querySelector('.g-hero-val').parentElement.style.borderTopColor='rgba(255,255,255,.06)';
-      // Top accent via js since ::before needs CSS
-      var accent=document.createElement('div');
-      accent.style.cssText='position:absolute;top:0;left:0;right:0;height:3px;background:'+d.cor+';opacity:.7;border-radius:14px 14px 0 0;';
+      var accent = document.createElement('div');
+      accent.style.cssText = 'position:absolute;top:0;left:0;right:0;height:3px;background:'+d.cor+';opacity:.7;border-radius:14px 14px 0 0;';
       div.appendChild(accent);
       row.appendChild(div);
     });
   }
 
-  /* ── DONUTS ───────────────────────────────────────────────── */
+  /* ── DONUTS — SLA Geral Dentro e Fora do Prazo ────────────── */
   function renderDonuts(){
-    var el=document.getElementById('donutsRow');
+    var el = document.getElementById('donutsRow');
     el.innerHTML='';
     CONTRACTS.forEach(function(c){
-      var K=ST[c.id].kpis||{};
-      var pct=nn(K.slaGeral), pc=pctColor(pct);
+      var K = ST[c.id].kpis||{};
+      var pct        = nn(K.slaGeral);
+      var pc         = pctColor(pct);
+      var prodDentro = nn(K.prodDentro);
+      var prodFora   = nn(K.prodFora);
+      var prodTotal  = nn(K.prodTotal);
 
-      var div=document.createElement('div');
-      div.className='g-card g-donut-outer';
-      div.innerHTML=
+      var div = document.createElement('div');
+      div.className = 'g-card g-donut-outer';
+      div.innerHTML =
         '<div class="g-ct" style="align-self:flex-start">'+
           '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
           c.name+' — SLA Geral'+
         '</div>'+
-        '<div class="g-donut-ring"><canvas id="donut_'+c.id+'" width="148" height="148"></canvas>'+
+        '<div class="g-donut-ring">'+
+          '<canvas id="donut_'+c.id+'" width="148" height="148"></canvas>'+
           '<div class="g-donut-mid">'+
             '<div class="g-donut-pct" style="color:'+pc+'">'+pct.toFixed(1)+'%</div>'+
             '<div class="g-donut-lbl">dentro do prazo</div>'+
           '</div>'+
         '</div>'+
         '<div class="g-kpi-row">'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(K.backlogTotal)+'</div><div class="g-kpi-lbl">Backlog</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(K.foraSla)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#f39c12">'+fmtN(K.preditiva)+'</div><div class="g-kpi-lbl">Preditiva</div></div>'+
-        '</div>'+
-        '<div class="g-kpi-row" style="margin-top:8px">'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#8a8a93">'+fmtN(K.backlogIndef)+'</div><div class="g-kpi-lbl">Sem SLA</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(K.prodTotal)+'</div><div class="g-kpi-lbl">Concluídas</div></div>'+
-          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+pc+'">'+fmtN(K.sitesForaAtivos)+'</div><div class="g-kpi-lbl">Sites Fora</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(prodDentro)+'</div><div class="g-kpi-lbl">Dentro SLA</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(prodFora)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
+          '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(prodTotal)+'</div><div class="g-kpi-lbl">Total</div></div>'+
         '</div>';
       el.appendChild(div);
 
       destroyChart('donut_'+c.id);
-      charts['donut_'+c.id]=new Chart(document.getElementById('donut_'+c.id),{
+      /* Donut verde/vermelho proporcional às concluídas */
+      var dData = prodTotal > 0 ? [prodDentro, prodFora] : [0.001, 0];
+      charts['donut_'+c.id] = new Chart(document.getElementById('donut_'+c.id),{
         type:'doughnut',
-        data:{ datasets:[{ data:[pct,100-pct], backgroundColor:[c.color,'rgba(255,140,0,.06)'], hoverBackgroundColor:[c.color,'rgba(255,140,0,.06)'], borderWidth:0, borderRadius:4 }] },
-        options:{ cutout:'76%', animation:{animateRotate:true,duration:900}, plugins:{legend:{display:false},tooltip:{enabled:false}} }
-      });
-    });
-  }
-
-  /* ── COMPOSIÇÃO DO BACKLOG (stacked) ──────────────────────── */
-  function renderBacklogComp(){
-    destroyChart('backlogComp');
-    var K=CONTRACTS.map(function(c){return ST[c.id].kpis||{};});
-    charts['backlogComp']=new Chart(document.getElementById('chartBacklogComp'),{
-      type:'bar',
-      data:{
-        labels:CONTRACTS.map(function(c){return c.name;}),
-        datasets:[
-          { label:'Fora do SLA',       data:K.map(function(k){return nn(k.foraSla);}),    backgroundColor:'rgba(231,76,60,.85)',   borderColor:'#e74c3c',  borderWidth:1, borderRadius:{topLeft:4,topRight:4} },
-          { label:'Preditiva',          data:K.map(function(k){return nn(k.preditiva);}),  backgroundColor:'rgba(243,156,18,.85)',  borderColor:'#f39c12',  borderWidth:1 },
-          { label:'Sem SLA Definido',   data:K.map(function(k){return nn(k.backlogIndef);}),backgroundColor:'rgba(138,138,147,.6)', borderColor:'#8a8a93',  borderWidth:1 },
-          { label:'Dentro do SLA',      data:K.map(function(k){return nn(k.dentroBl);}),   backgroundColor:'rgba(46,204,113,.80)',  borderColor:'#2ecc71',  borderWidth:1, borderRadius:{topLeft:4,topRight:4} }
-        ]
-      },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        scales:{
-          x:{ stacked:true, grid:{display:false}, ticks:{font:{size:13,weight:'bold'},color:'#f0f0f0'} },
-          y:{ stacked:true, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}} }
-        },
-        plugins:{
-          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
-          tooltip:TT,
-          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, color:'#0a0a0f', font:{size:11,weight:'bold'}, formatter:function(v){return v>0?v:'';} }
+        data:{ datasets:[{
+          data: dData,
+          backgroundColor: ['rgba(46,204,113,.85)','rgba(231,76,60,.80)'],
+          hoverBackgroundColor: ['#2ecc71','#e74c3c'],
+          borderWidth: 0, borderRadius: 4
+        }]},
+        options:{
+          cutout:'76%',
+          animation:{ animateRotate:true, duration:900 },
+          plugins:{
+            legend:{ display:false },
+            tooltip:{ enabled:true, callbacks:{
+              label:function(ctx){
+                return ctx.dataIndex===0?'Dentro do SLA: '+prodDentro:'Fora do SLA: '+prodFora;
+              }
+            }}
+          }
         }
-      }
+      });
     });
   }
 
   /* ── SLA POR PRIORIDADE ───────────────────────────────────── */
   function renderSlaPrioridade(){
-    if(!allReady())return;
+    if(!allReady()) return;
 
-    /* Tabela */
-    var tbody=CONTRACTS.map(function(c){
-      var K=ST[c.id].kpis||{};
-      var sbp=K.slaByPriority||{};
-      var cells=PRIORIDADES.map(function(p){
-        var v=sbp[p];
+    var tbody = CONTRACTS.map(function(c){
+      var K   = ST[c.id].kpis||{};
+      var sbp = K.slaByPriority||{};
+      var cells = PRIORIDADES.map(function(p){
+        var v = sbp[p];
         if(v===null||v===undefined) return '<td class="no-data">—</td>';
-        var meta=META_PRIO[p]||70;
-        var ok=v>=meta;
-        var pc=pctColor(v);
-        var fill=Math.min(100,Math.max(0,v));
-        var metaFill=Math.min(100,meta);
+        var meta = META_PRIO[p]||70, pc = pctColor(v);
+        var fill = Math.min(100,Math.max(0,v)), metaFill = Math.min(100,meta);
         return '<td>'+
           '<span class="g-pct-pill" style="color:'+pc+';background:'+pctBg(v)+'">'+v.toFixed(1)+'%</span>'+
           '<div class="g-meta-bar" style="width:100%;background:rgba(255,255,255,.08)">'+
@@ -696,35 +720,29 @@
           '</div>'+
         '</td>';
       }).join('');
-      return '<tr>'+
-        '<td><span style="color:'+c.color+'">'+c.name+'</span></td>'+
-        cells+
-      '</tr>';
+      return '<tr><td><span style="color:'+c.color+'">'+c.name+'</span></td>'+cells+'</tr>';
     }).join('');
 
-    var theadCells=PRIORIDADES.map(function(p){
+    var theadCells = PRIORIDADES.map(function(p){
       return '<th>'+p+'<span class="g-prazo-chip">'+PRAZO_LABELS[p]+'</span></th>';
     }).join('');
-    document.getElementById('slaPrioTable').innerHTML=
+    document.getElementById('slaPrioTable').innerHTML =
       '<table class="g-matrix">'+
         '<thead><tr><th>Contrato</th>'+theadCells+'</tr></thead>'+
         '<tbody>'+tbody+'</tbody>'+
       '</table>';
 
-    /* Gráfico */
     destroyChart('slaPrio');
-    charts['slaPrio']=new Chart(document.getElementById('chartSlaPrio'),{
+    charts['slaPrio'] = new Chart(document.getElementById('chartSlaPrio'),{
       type:'bar',
       data:{
-        labels:PRIORIDADES.map(function(p){return p+' ('+PRAZO_LABELS[p]+')'}),
+        labels: PRIORIDADES.map(function(p){ return p+' ('+PRAZO_LABELS[p]+')'; }),
         datasets: CONTRACTS.map(function(c){
-          var sbp=(ST[c.id].kpis||{}).slaByPriority||{};
+          var sbp = (ST[c.id].kpis||{}).slaByPriority||{};
           return {
             label:c.name,
-            data:PRIORIDADES.map(function(p){return sbp[p]!==null?sbp[p]:null;}),
-            backgroundColor:c.alpha+'0.80)',
-            borderColor:c.color,
-            borderWidth:1, borderRadius:4
+            data: PRIORIDADES.map(function(p){ return sbp[p]!=null?sbp[p]:null; }),
+            backgroundColor: c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:4
           };
         })
       },
@@ -732,61 +750,83 @@
         responsive:true, maintainAspectRatio:false,
         scales:{
           x:{ grid:{display:false}, ticks:{font:{size:12},color:'#f0f0f0'} },
-          y:{ min:0, max:100, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11},callback:function(v){return v+'%';}} }
+          y:{ min:0, max:100, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11},callback:function(v){ return v+'%'; }} }
         },
         plugins:{
           legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
           tooltip:TT,
           datalabels:{
-            display:function(ctx){return ctx.dataset.data[ctx.dataIndex]!=null;},
+            display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]!=null; },
             anchor:'end', align:'end', color:'#f0f0f0', font:{size:10,weight:'bold'},
-            formatter:function(v){return v!=null?v.toFixed(1)+'%':'';},
-            padding:{bottom:2}
+            formatter:function(v){ return v!=null?v.toFixed(1)+'%':''; }, padding:{bottom:2}
           }
         },
-        layout:{ padding:{ top:20 } }
+        layout:{ padding:{top:20} }
       }
     });
   }
 
-  /* ── SLA POR REGIÃO ───────────────────────────────────────── */
+  /* ── SLA POR REGIÃO — Dentro e Fora (stacked horizontal) ──── */
   function renderSlaRegiao(){
-    if(!allReady())return;
-    var row=document.getElementById('slaRegiaoRow');
+    if(!allReady()) return;
+    var row = document.getElementById('slaRegiaoRow');
     row.innerHTML='';
+
     CONTRACTS.forEach(function(c){
-      var K=ST[c.id].kpis;
-      var div=document.createElement('div');
-      div.className='g-card';
+      var K   = ST[c.id].kpis;
+      var div = document.createElement('div');
+      div.className = 'g-card';
+
       if(!K||ST[c.id].error){
-        div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div><div class="g-err">Sem dados</div>';
+        div.innerHTML = '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div><div class="g-err">Sem dados</div>';
         row.appendChild(div); return;
       }
-      var sbr=K.slaByRegion;
-      var regs=Object.keys(sbr).sort(function(a,b){
-        var pa=sbr[a].total>0?sbr[a].dentro/sbr[a].total:0;
-        var pb=sbr[b].total>0?sbr[b].dentro/sbr[b].total:0;
-        return pb-pa;
+
+      var sbr  = K.slaByRegion;
+      var regs = Object.keys(sbr).sort(function(a,b){
+        /* ordena pelo total de dentro desc */
+        return sbr[b].dentro - sbr[a].dentro;
       });
-      var h=Math.max(120,regs.length*32);
-      div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — SLA por Região</div>'+
+      var h = Math.max(140, regs.length*44);
+      div.innerHTML =
+        '<div class="g-ct">'+
+          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
+          c.name+' — Dentro e Fora do Prazo'+
+        '</div>'+
         '<div class="g-cbox" style="height:'+h+'px"><canvas id="sr_'+c.id+'"></canvas></div>';
+
       if(!regs.length){ div.querySelector('.g-cbox').innerHTML='<div class="g-empty">Sem dados de conclusão por região</div>'; }
       row.appendChild(div);
-      if(!regs.length)return;
-      var pcts=regs.map(function(r){return sbr[r].total>0?Math.round(sbr[r].dentro/sbr[r].total*1000)/10:0;});
+      if(!regs.length) return;
+
       destroyChart('sr_'+c.id);
-      charts['sr_'+c.id]=new Chart(document.getElementById('sr_'+c.id),{
-        type:'bar', data:{labels:regs,datasets:[{label:'%SLA',data:pcts,
-          backgroundColor:pcts.map(function(p){return p>=60?'rgba(46,204,113,.80)':(p>=35?'rgba(243,156,18,.80)':'rgba(231,76,60,.80)');}),
-          borderColor:pcts.map(pctColor),borderWidth:1,borderRadius:4}]},
-        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-          scales:{ x:{min:0,max:100,grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:10},callback:function(v){return v+'%';}}},
-                   y:{grid:{display:false},ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'}} },
-          plugins:{ legend:{display:false}, tooltip:TT,
-            datalabels:{ display:true,anchor:'end',align:'end',color:'#f0f0f0',font:{size:11,weight:'bold'},
-              formatter:function(v){return v.toFixed(1)+'%';}, padding:{left:4} } },
-          layout:{padding:{right:54}} }
+      charts['sr_'+c.id] = new Chart(document.getElementById('sr_'+c.id),{
+        type:'bar',
+        data:{
+          labels: regs,
+          datasets:[
+            { label:'Dentro do Prazo', data:regs.map(function(r){ return sbr[r].dentro||0; }),
+              backgroundColor:'rgba(46,204,113,.80)', borderColor:'#2ecc71', borderWidth:1, borderRadius:4 },
+            { label:'Fora do Prazo',   data:regs.map(function(r){ return sbr[r].fora||0; }),
+              backgroundColor:'rgba(231,76,60,.75)',  borderColor:'#e74c3c', borderWidth:1, borderRadius:4 }
+          ]
+        },
+        options:{
+          indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          scales:{
+            x:{ stacked:true, grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:10}}, beginAtZero:true },
+            y:{ stacked:true, grid:{display:false}, ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'} }
+          },
+          plugins:{
+            legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+            tooltip:TT,
+            datalabels:{
+              display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
+              anchor:'center', align:'center', color:'#fff', font:{size:11,weight:'bold'},
+              formatter:function(v){ return v>0?v:''; }
+            }
+          }
+        }
       });
     });
   }
@@ -794,82 +834,137 @@
   /* ── PRODUTIVIDADE ────────────────────────────────────────── */
   function renderProd(){
     destroyChart('prod');
-    charts['prod']=new Chart(document.getElementById('chartProd'),{
+    charts['prod'] = new Chart(document.getElementById('chartProd'),{
       type:'bar',
-      data:{ labels:CONTRACTS.map(function(c){return c.name;}),
+      data:{
+        labels: CONTRACTS.map(function(c){ return c.name; }),
         datasets:[
-          { label:'Dentro do SLA', data:CONTRACTS.map(function(c){return nn((ST[c.id].kpis||{}).prodDentro);}), backgroundColor:'rgba(46,204,113,.80)',  borderColor:'#2ecc71', borderWidth:1, borderRadius:5 },
-          { label:'Fora do SLA',   data:CONTRACTS.map(function(c){return nn((ST[c.id].kpis||{}).prodFora);}),   backgroundColor:'rgba(231,76,60,.75)',   borderColor:'#e74c3c', borderWidth:1, borderRadius:5 }
-        ]},
-      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        scales:{ x:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:11}}},
-                 y:{grid:{display:false},ticks:{font:{size:14,weight:'bold'},color:'#f0f0f0'}} },
-        plugins:{ legend:{position:'top',align:'end',labels:{boxWidth:10,font:{size:11},padding:14}}, tooltip:TT,
-          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, anchor:'end',align:'end',
-            color:'#f0f0f0',font:{size:12,weight:'bold'},formatter:function(v){return v>0?v.toLocaleString('pt-BR'):'';},padding:{left:4} } },
-        layout:{padding:{right:62}} }
+          { label:'Dentro do SLA', data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodDentro); }), backgroundColor:'rgba(46,204,113,.80)', borderColor:'#2ecc71', borderWidth:1, borderRadius:5 },
+          { label:'Fora do SLA',   data:CONTRACTS.map(function(c){ return nn((ST[c.id].kpis||{}).prodFora); }),   backgroundColor:'rgba(231,76,60,.75)',  borderColor:'#e74c3c', borderWidth:1, borderRadius:5 }
+        ]
+      },
+      options:{
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        scales:{
+          x:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}} },
+          y:{ grid:{display:false}, ticks:{font:{size:14,weight:'bold'},color:'#f0f0f0'} }
+        },
+        plugins:{
+          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+          tooltip:TT,
+          datalabels:{
+            display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
+            anchor:'end', align:'end', color:'#f0f0f0', font:{size:12,weight:'bold'},
+            formatter:function(v){ return v>0?v.toLocaleString('pt-BR'):''; }, padding:{left:4}
+          }
+        },
+        layout:{ padding:{right:62} }
+      }
     });
   }
 
   /* ── AGING ────────────────────────────────────────────────── */
   function renderAging(){
     destroyChart('aging');
-    var buckets=['< 7 dias','7 – 14 dias','14 – 30 dias','> 30 dias'];
-    var keys=['lt7','d7_14','d14_30','gt30'];
-    charts['aging']=new Chart(document.getElementById('chartAging'),{
+    charts['aging'] = new Chart(document.getElementById('chartAging'),{
       type:'bar',
-      data:{ labels:buckets, datasets:CONTRACTS.map(function(c){
-        return { label:c.name, data:keys.map(function(k){return nn(((ST[c.id].kpis||{aging:{}}).aging||{})[k]);}),
-          backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5 };
-      })},
-      options:{ responsive:true, maintainAspectRatio:false,
-        scales:{ x:{grid:{display:false},ticks:{font:{size:12},color:'#f0f0f0'}},
-                 y:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:11}}} },
-        plugins:{ legend:{position:'top',align:'end',labels:{boxWidth:10,font:{size:11},padding:14}}, tooltip:TT,
-          datalabels:{ display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;}, anchor:'end',align:'end',
-            color:'#f0f0f0',font:{size:10,weight:'bold'},formatter:function(v){return v>0?v:'';} } } }
+      data:{
+        labels: AGING_BUCKETS.map(function(b){ return b.label; }),
+        datasets: CONTRACTS.map(function(c){
+          var ag = ((ST[c.id].kpis||{}).aging)||AGING_BUCKETS.map(function(){ return 0; });
+          return {
+            label:c.name,
+            data: AGING_BUCKETS.map(function(_,i){ return nn(ag[i]); }),
+            backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5
+          };
+        })
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        scales:{
+          x:{ grid:{display:false}, ticks:{font:{size:11},color:'#f0f0f0',maxRotation:45,minRotation:45} },
+          y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
+        },
+        plugins:{
+          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+          tooltip:TT,
+          datalabels:{
+            display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
+            anchor:'end', align:'end', color:'#f0f0f0', font:{size:10,weight:'bold'},
+            formatter:function(v){ return v>0?v:''; }
+          }
+        }
+      }
     });
   }
 
-  /* ── SITES FORA POR REGIÃO ────────────────────────────────── */
+  /* ── SITES ATIVOS POR REGIÃO ──────────────────────────────── */
   function renderSitesFora(){
-    var row=document.getElementById('sitesForaRow');
+    var row = document.getElementById('sitesForaRow');
     row.innerHTML='';
+
     CONTRACTS.forEach(function(c){
-      var K=ST[c.id].kpis;
-      var div=document.createElement('div');
+      var K   = ST[c.id].kpis;
+      var div = document.createElement('div');
       div.className='g-card';
+
       if(!K||ST[c.id].error){
         div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+'</div><div class="g-err">Sem dados</div>';
         row.appendChild(div); return;
       }
-      var sf=K.sitesFora;
-      var regs=Object.keys(sf).sort(function(a,b){return sf[b]-sf[a];});
-      var h=Math.max(120,regs.length*32);
-      div.innerHTML='<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Sites Fora do SLA</div>'+
+
+      var ibr  = K.incidentsByRegion||{};
+      var regs = Object.keys(ibr).sort(function(a,b){ return ibr[b]-ibr[a]; });
+      var h    = Math.max(120, regs.length*32);
+
+      div.innerHTML =
+        '<div class="g-ct">'+
+          '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+
+          c.name+' — Sites em Campo'+
+        '</div>'+
         '<div class="g-cbox" style="height:'+h+'px"><canvas id="sf_'+c.id+'"></canvas></div>';
-      if(!regs.length){div.querySelector('.g-cbox').innerHTML='<div class="g-empty" style="padding-top:30px">✓ Nenhum site fora do SLA</div>';}
+
+      if(!regs.length){
+        div.querySelector('.g-cbox').innerHTML='<div class="g-empty" style="padding-top:30px">✓ Nenhum site ativo</div>';
+      }
       row.appendChild(div);
-      if(!regs.length)return;
+      if(!regs.length) return;
+
       destroyChart('sf_'+c.id);
-      charts['sf_'+c.id]=new Chart(document.getElementById('sf_'+c.id),{
-        type:'bar', data:{labels:regs,datasets:[{label:'Sites',data:regs.map(function(r){return sf[r];}),
-          backgroundColor:c.alpha+'0.80)',borderColor:c.color,borderWidth:1,borderRadius:4}]},
-        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-          scales:{ x:{grid:{color:'rgba(255,140,0,.06)'},ticks:{font:{size:10}}},
-                   y:{grid:{display:false},ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'}} },
-          plugins:{ legend:{display:false}, tooltip:TT,
-            datalabels:{display:true,anchor:'end',align:'end',color:'#f0f0f0',font:{size:11,weight:'bold'},
-              formatter:function(v){return v;},padding:{left:4}} },
-          layout:{padding:{right:28}} }
+      charts['sf_'+c.id] = new Chart(document.getElementById('sf_'+c.id),{
+        type:'bar',
+        data:{
+          labels: regs,
+          datasets:[{
+            label:'Sites', data:regs.map(function(r){ return ibr[r]; }),
+            backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:4
+          }]
+        },
+        options:{
+          indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          scales:{
+            x:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:10}}, beginAtZero:true },
+            y:{ grid:{display:false}, ticks:{font:{size:12,weight:'bold'},color:'#f0f0f0'} }
+          },
+          plugins:{
+            legend:{ display:false }, tooltip:TT,
+            datalabels:{
+              display:true, anchor:'end', align:'end', color:'#f0f0f0', font:{size:11,weight:'bold'},
+              formatter:function(v){ return v; }, padding:{left:4}
+            }
+          },
+          layout:{ padding:{right:28} }
+        }
       });
     });
   }
 
   /* ── BOOT ─────────────────────────────────────────────────── */
-  window.switchTab = switchTab;
-  window.loadAll   = loadAll;
+  window.switchTab          = switchTab;
+  window.loadAll            = loadAll;
+  window.setContractFilter  = setContractFilter;
   renderStrips();
+  renderFilterButtons();
   renderHeroKpis();
   loadAll();
 
