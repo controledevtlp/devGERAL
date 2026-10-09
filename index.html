@@ -194,6 +194,19 @@
     .g-meta-bar { height: 4px; border-radius: 4px; margin-top: 6px; }
     .g-matrix td.no-data { color: var(--muted); font-size: 11px; }
 
+    /* Update-risk list */
+    .g-upd-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; margin-bottom:4px; background:var(--card2); font-size:12px; }
+    .g-upd-os  { font-weight:700; color:var(--primary); min-width:110px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .g-upd-st  { flex:1; color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .g-upd-time{ font-weight:800; font-size:12px; min-width:56px; text-align:right; flex-shrink:0; }
+    .g-upd-list{ max-height:300px; overflow-y:auto; }
+
+    /* Produtividade kpi strip */
+    .g-prod-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+    .g-prod-kpi  { background:var(--card2); border-radius:8px; padding:8px 10px; text-align:center; }
+    .g-prod-kpi-val{ font-family:'Sora',sans-serif; font-size:20px; font-weight:800; line-height:1; }
+    .g-prod-kpi-lbl{ font-size:9px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
+
     /* Responsive */
     @media (max-width: 1100px) { .g-6col { grid-template-columns: repeat(3,1fr); } }
     @media (max-width: 960px)  { .g-3col, .g-6col { grid-template-columns: 1fr; } .g-2col { grid-template-columns: 1fr; } }
@@ -233,6 +246,12 @@
   </button>
   <button id="btn-op" class="g-tab-btn" onclick="switchTab('op')">
     <span class="g-tab-dot"></span>Operacional
+  </button>
+  <button id="btn-prod" class="g-tab-btn" onclick="switchTab('prod')">
+    <span class="g-tab-dot"></span>Produtividade
+  </button>
+  <button id="btn-upd" class="g-tab-btn" onclick="switchTab('upd')">
+    <span class="g-tab-dot"></span>Atualizações
   </button>
 </nav>
 
@@ -303,6 +322,40 @@
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Sites fora por Região</div>
     <div class="g-3col" id="sitesForaRow"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- TAB 4 — PRODUTIVIDADE -->
+<div id="tab-prod" class="g-tab-pane">
+<div class="g-main">
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Encerramentos por Dia — Dentro × Fora SLA (últimos 30 dias)</div>
+    <div class="g-3col" id="prodDiarioRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Perdas de Prazo por Horário do Dia</div>
+    <div class="g-3col" id="prodPerdaRow"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- TAB 5 — ATUALIZAÇÕES -->
+<div id="tab-upd" class="g-tab-pane">
+<div class="g-main">
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Monitoramento de Atualizações — Backlog Ativo</div>
+    <div class="g-3col" id="updKpiRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>OSs Mais Tempo Sem Atualização</div>
+    <div class="g-3col" id="updListRow"></div>
   </div>
 
 </div>
@@ -523,7 +576,7 @@
         if(!res.ok) throw new Error(res.error||'Resposta inválida');
         var tasks = (res.data&&res.data.tasksEnriched) ? res.data.tasksEnriched : [];
         var incs  = (res.data&&res.data.incidentsEnriched) ? res.data.incidentsEnriched : [];
-        ST[c.id]={ loading:false, kpis:computeKpis(tasks,incs,c.region), savedAt:res.savedAt||null, error:null };
+        ST[c.id]={ loading:false, kpis:computeKpis(tasks,incs,c.region), savedAt:res.savedAt||null, error:null, tasks:tasks, incs:incs };
         render();
       })
       .catch(function(err){
@@ -566,6 +619,8 @@
     if(tab==='exec')      { renderDonuts(); }
     else if(tab==='sla')  { renderSlaPrioridade(); renderSlaRegiao(); }
     else if(tab==='op')   { renderProd(); renderAging(); renderSitesFora(); }
+    else if(tab==='prod') { renderProdutividade(); }
+    else if(tab==='upd')  { renderAtualizacoes(); }
   }
 
   /* ── FILTER BUTTONS ───────────────────────────────────────── */
@@ -1060,6 +1115,292 @@
         }
       });
     });
+  }
+
+  /* ── COMPUTE: último timestamp do diário (motivoCancelamento) ── */
+  var RE_DIARY = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}(?::\d{2})?|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/g;
+  function parseLastDiaryDt(texto) {
+    if (!texto) return null;
+    RE_DIARY.lastIndex = 0;
+    var last = null, m;
+    while ((m = RE_DIARY.exec(String(texto))) !== null) {
+      var dt = safeDate(m[1]);
+      if (dt && !isNaN(dt.getTime())) last = dt;
+    }
+    return last;
+  }
+  function fmtHrs(h) {
+    if (h < 1) return Math.round(h * 60) + 'min';
+    if (h < 24) return h.toFixed(0) + 'h';
+    return (h / 24).toFixed(1) + 'd';
+  }
+
+  /* ── COMPUTE: encerramentos diários (últimos N dias) ──────── */
+  function computeProdDiario(tasks, days) {
+    days = days || 30;
+    var now = Date.now();
+    var limite = now - days * 864e5;
+    var byDay = {};
+    tasks.forEach(function(t) {
+      if (!t.fimCalc) return;
+      var dt = safeDate(t.fimCalc);
+      if (!dt || isNaN(dt.getTime()) || dt.getTime() < limite) return;
+      var d = dt.toISOString().slice(0, 10);
+      if (!byDay[d]) byDay[d] = { dentro: 0, fora: 0 };
+      if (t.statusSla === 'DENTRO DO SLA') byDay[d].dentro++;
+      else byDay[d].fora++;
+    });
+    return Object.keys(byDay).sort().map(function(d) {
+      var v = byDay[d];
+      var total = v.dentro + v.fora;
+      var dt2 = new Date(d + 'T12:00:00');
+      var label = dt2.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return { dia: d, label: label, dentro: v.dentro, fora: v.fora, total: total,
+               pct: total > 0 ? Math.round(v.dentro / total * 1000) / 10 : null };
+    });
+  }
+
+  /* ── COMPUTE: perdas de prazo por hora ───────────────────── */
+  function computePerdaHora(tasks) {
+    var hrs = new Array(24).fill(0);
+    var total = 0;
+    tasks.forEach(function(t) {
+      var isFora = (t.fimCalc && t.vencimentoCalc && safeDate(t.fimCalc) > safeDate(t.vencimentoCalc))
+                || (!t.fimCalc && t.statusSla === 'FORA DO SLA' && t.vencimentoCalc);
+      if (!isFora) return;
+      var dt = safeDate(t.vencimentoCalc);
+      if (!dt || isNaN(dt.getTime())) return;
+      hrs[dt.getHours()]++;
+      total++;
+    });
+    return { hrs: hrs, total: total };
+  }
+
+  /* ── COMPUTE: estatísticas de atualização ────────────────── */
+  function computeUpdStats(tasks) {
+    var now = Date.now();
+    var backlog = tasks.filter(function(t) {
+      return !t.fimCalc && !(t.motivoCancelamento || '').toString().trim();
+    });
+    var comDiario = 0, semDiario = 0;
+    var risco24 = 0, risco48 = 0, riscoTotal = 0;
+    var items = []; // {osNumero, status, horasSemUpd, lastDt, prioridade}
+    backlog.forEach(function(t) {
+      var lastDt = parseLastDiaryDt(t.motivoCancelamento);
+      if (lastDt) {
+        comDiario++;
+        var h = (now - lastDt.getTime()) / 3600000;
+        var entry = {
+          osNumero: t.osNumero || t.enderecoId || '—',
+          status: t.status || t.filaAtual || '—',
+          prioridade: t.prioridade || '—',
+          horasSemUpd: h,
+          lastDt: lastDt
+        };
+        items.push(entry);
+        riscoTotal++;
+        if (h > 24) risco24++;
+        if (h > 48) risco48++;
+      } else {
+        semDiario++;
+        // Sem diário: usar createdAt como referência se disponível
+        var createDt = safeDate(t.dataCriacaoAS || t.createdAt);
+        if (createDt) {
+          var h2 = (now - createDt.getTime()) / 3600000;
+          items.push({
+            osNumero: t.osNumero || t.enderecoId || '—',
+            status: t.status || t.filaAtual || '—',
+            prioridade: t.prioridade || '—',
+            horasSemUpd: h2,
+            lastDt: null
+          });
+        }
+      }
+    });
+    items.sort(function(a, b) { return b.horasSemUpd - a.horasSemUpd; });
+    var avgH = items.length
+      ? items.reduce(function(s, i) { return s + i.horasSemUpd; }, 0) / items.length
+      : 0;
+    return { comDiario: comDiario, semDiario: semDiario, risco24: risco24, risco48: risco48, avgH: avgH, items: items.slice(0, 15) };
+  }
+
+  /* ── RENDER: PRODUTIVIDADE ────────────────────────────────── */
+  function renderProdutividade() {
+    if (!allReady()) return;
+    var rowD = document.getElementById('prodDiarioRow');
+    var rowP = document.getElementById('prodPerdaRow');
+    rowD.innerHTML = ''; rowP.innerHTML = '';
+
+    CONTRACTS.forEach(function(c) {
+      var tasks = (ST[c.id].tasks) || [];
+      var dias  = computeProdDiario(tasks, 30);
+      var perda = computePerdaHora(tasks);
+
+      // ── Encerramentos por dia ──
+      var totEnc = dias.reduce(function(s, d) { return s + d.total; }, 0);
+      var totDen = dias.reduce(function(s, d) { return s + d.dentro; }, 0);
+      var slaMedia = totEnc > 0 ? Math.round(totDen / totEnc * 1000) / 10 : 0;
+      var pctCor = slaMedia >= 80 ? '#2ecc71' : slaMedia >= 60 ? '#f39c12' : '#e74c3c';
+
+      var divD = document.createElement('div');
+      divD.className = 'g-card';
+      divD.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Últimos 30 dias</div>'+
+        '<div class="g-prod-kpis">'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(totEnc)+'</div><div class="g-prod-kpi-lbl">Encerradas</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#2ecc71">'+fmtN(totDen)+'</div><div class="g-prod-kpi-lbl">Dentro SLA</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+pctCor+'">'+slaMedia.toFixed(1)+'%</div><div class="g-prod-kpi-lbl">SLA Médio</div></div>'+
+        '</div>'+
+        (dias.length ? '<div class="g-cbox" style="height:200px;"><canvas id="prodD_'+c.id+'"></canvas></div>'
+                     : '<div class="g-empty">Sem encerramentos no período</div>');
+      rowD.appendChild(divD);
+
+      if (dias.length) {
+        destroyChart('prodD_'+c.id);
+        var pcts = dias.map(function(d) { return d.pct; });
+        charts['prodD_'+c.id] = new Chart(document.getElementById('prodD_'+c.id), {
+          type: 'bar',
+          data: {
+            labels: dias.map(function(d) { return d.label; }),
+            datasets: [
+              { label: 'Dentro SLA', data: dias.map(function(d) { return d.dentro; }),
+                backgroundColor: 'rgba(46,204,113,.75)', borderColor: '#2ecc71', borderWidth: 0, borderRadius: 3,
+                yAxisID: 'y', order: 2 },
+              { label: 'Fora SLA', data: dias.map(function(d) { return d.fora; }),
+                backgroundColor: 'rgba(231,76,60,.72)', borderColor: '#e74c3c', borderWidth: 0, borderRadius: 3,
+                yAxisID: 'y', order: 2 },
+              { label: '% SLA', data: pcts, type: 'line', yAxisID: 'yP',
+                borderColor: 'rgba(241,196,15,.85)', backgroundColor: 'transparent',
+                borderWidth: 1.5, borderDash: [4,4], pointRadius: 3, pointHoverRadius: 5,
+                tension: 0.35, fill: false, spanGaps: true, order: 0 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { stacked: true, ticks: { color: '#8a8a93', font: { size: 9 }, maxRotation: 45, minRotation: 45 }, grid: { color: 'rgba(255,140,0,.05)' } },
+              y: { stacked: true, ticks: { color: '#8a8a93', font: { size: 10 } }, grid: { color: 'rgba(255,140,0,.05)' }, beginAtZero: true },
+              yP: { position: 'right', min: 0, max: 100,
+                    ticks: { color: '#f1c40f', font: { size: 9 }, callback: function(v) { return v+'%'; } },
+                    grid: { drawOnChartArea: false } }
+            },
+            plugins: {
+              legend: { position: 'top', align: 'end', labels: { boxWidth: 9, font: { size: 10 }, padding: 10,
+                filter: function(item) { return item.text !== '% SLA'; } } },
+              tooltip: TT, datalabels: { display: false }
+            }
+          }
+        });
+      }
+
+      // ── Perdas por horário ──
+      var divP = document.createElement('div');
+      divP.className = 'g-card';
+      var hrPico = 0, hrPicoCount = 0;
+      perda.hrs.forEach(function(c2, hr) { if (c2 > hrPicoCount) { hrPicoCount = c2; hrPico = hr; } });
+      divP.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Vencimentos fora do SLA por hora</div>'+
+        (perda.total > 0
+          ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+perda.total+' perdas · pico às '+hrPico+'h ('+hrPicoCount+')</div>'+
+            '<div class="g-cbox" style="height:180px;"><canvas id="prodP_'+c.id+'"></canvas></div>'
+          : '<div class="g-empty">Sem perdas de prazo no período</div>');
+      rowP.appendChild(divP);
+
+      if (perda.total > 0) {
+        destroyChart('prodP_'+c.id);
+        var hrLabels = Array.from({length:24}, function(_,i){ return i+'h'; });
+        var colors = perda.hrs.map(function(v, hr) {
+          return hr === hrPico ? c.alpha+'0.95)' : c.alpha+'0.55)';
+        });
+        charts['prodP_'+c.id] = new Chart(document.getElementById('prodP_'+c.id), {
+          type: 'bar',
+          data: {
+            labels: hrLabels,
+            datasets: [{ label: 'Perdas', data: perda.hrs, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#8a8a93', font: { size: 9 } }, grid: { color: 'rgba(255,140,0,.05)' } },
+              y: { ticks: { color: '#8a8a93', font: { size: 10 } }, grid: { color: 'rgba(255,140,0,.05)' }, beginAtZero: true }
+            },
+            plugins: {
+              legend: { display: false }, tooltip: TT,
+              datalabels: {
+                display: function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0; },
+                anchor: 'end', align: 'end', color: '#f0f0f0', font: { size: 9, weight: 'bold' },
+                formatter: function(v) { return v > 0 ? v : ''; }
+              }
+            }
+          }
+        });
+      }
+    });
+  }
+
+  /* ── RENDER: ATUALIZAÇÕES ─────────────────────────────────── */
+  function renderAtualizacoes() {
+    if (!allReady()) return;
+    var rowK = document.getElementById('updKpiRow');
+    var rowL = document.getElementById('updListRow');
+    rowK.innerHTML = ''; rowL.innerHTML = '';
+
+    CONTRACTS.forEach(function(c) {
+      var tasks = (ST[c.id].tasks) || [];
+      var upd   = computeUpdStats(tasks);
+      var riscoColor = upd.risco24 > 0 ? '#e74c3c' : '#2ecc71';
+      var avgColor = upd.avgH > 48 ? '#e74c3c' : upd.avgH > 24 ? '#f39c12' : '#2ecc71';
+
+      // KPI card
+      var divK = document.createElement('div');
+      divK.className = 'g-card';
+      divK.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Backlog ativo</div>'+
+        '<div class="g-prod-kpis">'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#2ecc71">'+upd.comDiario+'</div><div class="g-prod-kpi-lbl">Com diário</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:var(--muted)">'+upd.semDiario+'</div><div class="g-prod-kpi-lbl">Sem diário</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+riscoColor+'">'+upd.risco24+'</div><div class="g-prod-kpi-lbl">&gt;24h sem upd.</div></div>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding-top:6px;border-top:1px solid var(--border)">'+
+          '<span>&gt;48h crítico: <b style="color:'+( upd.risco48>0?'#e74c3c':'#2ecc71' )+'">'+upd.risco48+'</b></span>'+
+          '<span>Intervalo médio: <b style="color:'+avgColor+'">'+fmtHrs(upd.avgH)+'</b></span>'+
+        '</div>';
+      rowK.appendChild(divK);
+
+      // Lista de OSs mais tempo sem atualização
+      var divL = document.createElement('div');
+      divL.className = 'g-card';
+      var listHtml = '';
+      if (!upd.items.length) {
+        listHtml = '<div class="g-empty">Sem dados de diário no backlog</div>';
+      } else {
+        var maxH = upd.items[0] ? upd.items[0].horasSemUpd : 1;
+        listHtml = '<div class="g-upd-list">' + upd.items.map(function(it) {
+          var cor = it.horasSemUpd > 72 ? '#e74c3c' : it.horasSemUpd > 48 ? '#ff8c00' : it.horasSemUpd > 24 ? '#f39c12' : '#2ecc71';
+          var pct = maxH > 0 ? Math.min(100, it.horasSemUpd / maxH * 100) : 0;
+          var noDiary = it.lastDt === null ? ' <span style="font-size:9px;color:var(--muted)">(sem diário)</span>' : '';
+          return '<div class="g-upd-row">'+
+            '<span class="g-upd-os">'+escHtml(it.osNumero)+'</span>'+
+            '<span class="g-upd-st">'+escHtml(it.prioridade)+'</span>'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="height:4px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden">'+
+                '<div style="width:'+pct.toFixed(1)+'%;height:100%;background:'+cor+';border-radius:4px"></div>'+
+              '</div>'+
+            '</div>'+
+            '<span class="g-upd-time" style="color:'+cor+'">'+fmtHrs(it.horasSemUpd)+'</span>'+
+            noDiary+
+          '</div>';
+        }).join('') + '</div>';
+      }
+      divL.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Top OSs por tempo sem atualização</div>'+
+        listHtml;
+      rowL.appendChild(divL);
+    });
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   /* ── BOOT ─────────────────────────────────────────────────── */
