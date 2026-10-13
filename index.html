@@ -505,10 +505,11 @@
     var now = Date.now();
     var backlog=[], completed=[];
     tasks.forEach(function(t){
-      var fim    = (t.fimCalc||'').toString().trim();
-      var motivo = (t.motivoCancelamento||'').toString().trim();
-      if(fim) completed.push(t);
-      else if(!motivo) backlog.push(t);
+      var s = (t.status||'').toString().trim().toUpperCase();
+      /* Match exactly what the public dashboards use */
+      if(s==='CONCLUÍDA'||s==='CONCLUIDA') completed.push(t);
+      else if(s==='NÃO INICIADO'||s==='NAO INICIADO'||s==='INICIADO') backlog.push(t);
+      /* CANCELADA e PENDENTE ficam fora de ambas as listas */
     });
 
     var foraSla   = backlog.filter(function(t){ return t.statusSla==='FORA DO SLA'; }).length;
@@ -519,8 +520,18 @@
       return !s||(s!=='FORA DO SLA'&&s!=='DENTRO DO SLA'&&s!=='PREDITIVA');
     }).length;
 
-    var prodDentro = completed.filter(function(t){ return t.statusSla==='DENTRO DO SLA'; }).length;
-    var slaGeral   = completed.length>0 ? Math.round(prodDentro/completed.length*1000)/10 : 0;
+    /* SLA Geral: fimCalc <= vencimentoCalc (igual ao dashboard público) */
+    var encDentro=0, encFora=0;
+    completed.forEach(function(t){
+      if(!t.fimCalc||!t.vencimentoCalc) return;
+      var dtFim=safeDate(t.fimCalc), dtVenc=safeDate(t.vencimentoCalc);
+      if(!dtFim||!dtVenc) return;
+      if(dtFim.getTime()<=dtVenc.getTime()) encDentro++; else encFora++;
+    });
+    var prodDentro = encDentro;
+    var encBase    = encDentro + encFora;
+    var slaGeral   = encBase>0 ? Math.round(encDentro/encBase*1000)/10 :
+                     (dentroBl+foraSla>0 ? Math.round(dentroBl/(dentroBl+foraSla)*1000)/10 : 0);
 
     /* Aging — dataCriacaoAS em minutos, 9 faixas (igual aos dashboards públicos) */
     var aging = AGING_BUCKETS.map(function(){ return 0; });
@@ -608,13 +619,13 @@
     });
 
     /* GMG na fila */
-    var gmgFila=backlog.filter(function(t){ return (t.filaAtual||'').toUpperCase().indexOf('GMG')>=0; }).length;
+    var gmgFila=backlog.filter(function(t){ return (t.habilidadeTrabalho||t.filaAtual||'').toUpperCase().indexOf('GMG')>=0; }).length;
 
     return {
       backlogTotal:backlog.length, foraSla:foraSla, preditiva:preditiva,
       dentroBl:dentroBl, backlogIndef:indef,
       prodTotal:completed.length, prodDentro:prodDentro, prodFora:completed.length-prodDentro,
-      slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
+      encBase:encBase, slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
       aging:aging,
       slaByRegion:slaByRegion, incidentsByRegion:incByReg,
       slaByPriority:slaByPriority, backlogByPriority:backlogByPriority,
@@ -749,7 +760,8 @@
       totPreditiva+= nn(K.preditiva);
       totIndef    += nn(K.backlogIndef);
       totGmg      += nn(K.gmgFila);
-      if(K.prodTotal>0){ slaVals.push(K.slaGeral*K.prodTotal); slaWeights.push(K.prodTotal); }
+      var _eb = nn(K.encBase)||nn(K.prodTotal);
+      if(_eb>0){ slaVals.push(K.slaGeral*_eb); slaWeights.push(_eb); }
     });
     var totWeight = slaWeights.reduce(function(a,b){ return a+b; },0);
     var slaMedia  = totWeight>0 ? Math.round(slaVals.reduce(function(a,b){ return a+b; },0)/totWeight*10)/10 : 0;
@@ -764,14 +776,34 @@
 
     var gmgCor = totGmg > 10 ? '#e74c3c' : totGmg > 5 ? '#f39c12' : totGmg > 0 ? '#ff8c00' : '#2ecc71';
 
+    /* Collect drill task lists */
+    var drillAll=[], drillBacklog=[], drillFora=[], drillPred=[], drillSla=[], drillIndef=[], drillGmg=[];
+    if(!loading) filtered.forEach(function(c){
+      var tasks = (ST[c.id].tasks||[]);
+      var tag = function(t){ var o=Object.assign({},t); o._contrato=c.name; o._color=c.color; return o; };
+      tasks.forEach(function(t){
+        var s=(t.status||'').trim().toUpperCase();
+        var taggedT = tag(t);
+        if(s==='CONCLUÍDA'||s==='CONCLUIDA'){ drillSla.push(taggedT); }
+        else if(s==='NÃO INICIADO'||s==='NAO INICIADO'||s==='INICIADO'){
+          drillBacklog.push(taggedT);
+          if(t.statusSla==='FORA DO SLA') drillFora.push(taggedT);
+          else if(t.statusSla==='PREDITIVA') drillPred.push(taggedT);
+          var sla=(t.statusSla||'').trim();
+          if(!sla||(sla!=='FORA DO SLA'&&sla!=='DENTRO DO SLA'&&sla!=='PREDITIVA')) drillIndef.push(taggedT);
+          if((t.habilidadeTrabalho||t.filaAtual||'').toUpperCase().indexOf('GMG')>=0) drillGmg.push(taggedT);
+        }
+      });
+    });
+
     var defs=[
-      { id:'hSites',  lbl:'Sites Fora Ativos',  val:loading?'…':fmtN(totSitesF),          cor:'#e74c3c', sub:'Incidentes sem resolução',         br:makeBreak('sitesForaAtivos') },
-      { id:'hBacklog',lbl:'Backlog Total',        val:loading?'…':fmtN(totBacklog),         cor:'#ff8c00', sub:'TSKs abertas aguardando execução',  br:makeBreak('backlogTotal') },
-      { id:'hFora',   lbl:'Fora do SLA',          val:loading?'…':fmtN(totForaSla),         cor:'#e74c3c', sub:'SLA já violado, ação imediata',     br:makeBreak('foraSla') },
-      { id:'hPred',   lbl:'Preditiva',             val:loading?'…':fmtN(totPreditiva),       cor:'#f39c12', sub:'Próximas de violar o SLA',           br:makeBreak('preditiva') },
-      { id:'hSla',    lbl:'SLA Geral',             val:loading?'…':slaMedia.toFixed(1)+'%', cor:'#2ecc71', sub:'Concluídas dentro do prazo',         br:makeBreak('slaGeral') },
-      { id:'hIndef',  lbl:'Sem SLA Definido',     val:loading?'…':fmtN(totIndef),           cor:'#8a8a93', sub:'Backlog sem classificação de prazo', br:makeBreak('backlogIndef') },
-      { id:'hGmg',    lbl:'GMGs na Fila',          val:loading?'…':fmtN(totGmg),             cor:gmgCor,    sub:'TSKs aguardando atend. GMG',         br:makeBreak('gmgFila') }
+      { id:'hSites',  lbl:'Sites Fora Ativos',  val:loading?'…':fmtN(totSitesF),          cor:'#e74c3c', sub:'Incidentes sem resolução',         br:makeBreak('sitesForaAtivos'), drill:null },
+      { id:'hBacklog',lbl:'Backlog Total',        val:loading?'…':fmtN(totBacklog),         cor:'#ff8c00', sub:'TSKs abertas aguardando execução',  br:makeBreak('backlogTotal'),    drill:drillBacklog },
+      { id:'hFora',   lbl:'Fora do SLA',          val:loading?'…':fmtN(totForaSla),         cor:'#e74c3c', sub:'SLA já violado, ação imediata',     br:makeBreak('foraSla'),         drill:drillFora },
+      { id:'hPred',   lbl:'Preditiva',             val:loading?'…':fmtN(totPreditiva),       cor:'#f39c12', sub:'Próximas de violar o SLA',           br:makeBreak('preditiva'),       drill:drillPred },
+      { id:'hSla',    lbl:'SLA Geral',             val:loading?'…':slaMedia.toFixed(1)+'%', cor:'#2ecc71', sub:'Concluídas dentro do prazo',         br:makeBreak('slaGeral'),        drill:drillSla },
+      { id:'hIndef',  lbl:'Sem SLA Definido',     val:loading?'…':fmtN(totIndef),           cor:'#8a8a93', sub:'Backlog sem classificação de prazo', br:makeBreak('backlogIndef'),    drill:drillIndef },
+      { id:'hGmg',    lbl:'GMGs na Fila',          val:loading?'…':fmtN(totGmg),             cor:gmgCor,    sub:'TSKs aguardando atend. GMG',         br:makeBreak('gmgFila'),         drill:drillGmg }
     ];
 
     var row = document.getElementById('heroRow');
@@ -781,8 +813,15 @@
       div.className = 'g-hero';
       div.id = d.id;
       div.style.borderColor = 'rgba(255,255,255,.06)';
+      if(d.drill && !loading){
+        div.style.cursor='pointer';
+        div.title='Clique para ver detalhes';
+        var drillCopy = d.drill;
+        var drillLbl  = d.lbl;
+        div.addEventListener('click', function(){ openDrill(drillLbl, drillCopy); });
+      }
       div.innerHTML =
-        '<div class="g-hero-lbl">'+d.lbl+'</div>'+
+        '<div class="g-hero-lbl">'+d.lbl+(d.drill&&!loading?' <span style="font-size:9px;opacity:.5">↗</span>':'')+'</div>'+
         '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>'+
         '<div class="g-hero-sub">'+d.sub+'</div>'+
         '<div class="g-hero-break">'+d.br+'</div>';
@@ -848,10 +887,10 @@
         '</div>'+
       '</div>'+
       '<div class="g-kpi-row">'+
-        '<div class="g-kpi"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(dentro)+'</div><div class="g-kpi-lbl">Dentro SLA</div></div>'+
-        '<div class="g-kpi"><div class="g-kpi-val" style="color:#f39c12">'+fmtN(pred)+'</div><div class="g-kpi-lbl">Preditiva</div></div>'+
-        '<div class="g-kpi"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(fora)+'</div><div class="g-kpi-lbl">Fora SLA</div></div>'+
-        '<div class="g-kpi"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(total)+'</div><div class="g-kpi-lbl">Total</div></div>'+
+        '<div class="g-kpi" style="cursor:pointer" title="Ver lista" onclick="openDonutDrill(\''+c.id+'\',\'DENTRO DO SLA\')"><div class="g-kpi-val" style="color:#2ecc71">'+fmtN(dentro)+'</div><div class="g-kpi-lbl">Dentro SLA ↗</div></div>'+
+        '<div class="g-kpi" style="cursor:pointer" title="Ver lista" onclick="openDonutDrill(\''+c.id+'\',\'PREDITIVA\')"><div class="g-kpi-val" style="color:#f39c12">'+fmtN(pred)+'</div><div class="g-kpi-lbl">Preditiva ↗</div></div>'+
+        '<div class="g-kpi" style="cursor:pointer" title="Ver lista" onclick="openDonutDrill(\''+c.id+'\',\'FORA DO SLA\')"><div class="g-kpi-val" style="color:#e74c3c">'+fmtN(fora)+'</div><div class="g-kpi-lbl">Fora SLA ↗</div></div>'+
+        '<div class="g-kpi" style="cursor:pointer" title="Ver lista" onclick="openDonutDrill(\''+c.id+'\',null)"><div class="g-kpi-val" style="color:'+c.color+'">'+fmtN(total)+'</div><div class="g-kpi-lbl">Total ↗</div></div>'+
       '</div>'+(sel?'<div style="text-align:center;font-size:10px;color:var(--muted);margin-top:4px">Filtrado: '+sel+'</div>':'');
     if(!existing) el.appendChild(div);
 
@@ -887,6 +926,22 @@
     if(c) renderDonut(c);
   }
 
+  function openDonutDrill(contractId, statusSla){
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if(!c) return;
+    var tasks = (ST[c.id].tasks||[]).filter(function(t){
+      var s=(t.status||'').trim().toUpperCase();
+      if(s!=='NÃO INICIADO'&&s!=='NAO INICIADO'&&s!=='INICIADO') return false;
+      var sel = donutPrioFilter[contractId];
+      if(sel && (t.prioridade||'').trim().toUpperCase()!==sel) return false;
+      if(statusSla) return t.statusSla===statusSla;
+      return true;
+    }).map(function(t){ return Object.assign({},t,{_contrato:c.name,_color:c.color}); });
+    var lbl = statusSla ? c.name+' — Backlog '+statusSla : c.name+' — Backlog Total';
+    if(donutPrioFilter[contractId]) lbl += ' ('+donutPrioFilter[contractId]+')';
+    openDrill(lbl, tasks);
+  }
+
   /* ── SLA POR PRIORIDADE ───────────────────────────────────── */
   function renderSlaPrioridade(){
     if(!allReady()) return;
@@ -920,21 +975,28 @@
         '<tbody>'+tbody+'</tbody>'+
       '</table>';
 
-    /* Build count map: {contractId: {P1: {dentro, fora, total}, ...}} */
+    /* Build count map + drill task lists */
     var cntMap = {};
+    var slaDrillMap = {}; /* {contractId: {P1: {dentro:[tasks], fora:[tasks]}}} */
     CONTRACTS.forEach(function(c){
       var tasks = ST[c.id].tasks || [];
-      var completed = tasks.filter(function(t){ return (t.fimCalc||'').toString().trim(); });
+      var conc = tasks.filter(function(t){
+        var s=(t.status||'').trim().toUpperCase();
+        return s==='CONCLUÍDA'||s==='CONCLUIDA';
+      });
       var prioMap = {};
-      PRIORIDADES.forEach(function(p){ prioMap[p]={dentro:0,fora:0,total:0}; });
-      completed.forEach(function(t){
+      var drillP  = {};
+      PRIORIDADES.forEach(function(p){ prioMap[p]={dentro:0,fora:0,total:0}; drillP[p]={dentro:[],fora:[]}; });
+      conc.forEach(function(t){
         var p=(t.prioridade||'').trim().toUpperCase();
         if(!prioMap[p]) return;
         prioMap[p].total++;
-        if(t.statusSla==='DENTRO DO SLA') prioMap[p].dentro++;
-        else prioMap[p].fora++;
+        var tagged = Object.assign({},t,{_contrato:c.name,_color:c.color});
+        if(t.statusSla==='DENTRO DO SLA'){ prioMap[p].dentro++; drillP[p].dentro.push(tagged); }
+        else { prioMap[p].fora++; drillP[p].fora.push(tagged); }
       });
       cntMap[c.id] = prioMap;
+      slaDrillMap[c.id] = drillP;
     });
 
     destroyChart('slaPrio');
@@ -962,6 +1024,17 @@
       },
       options:{
         responsive:true, maintainAspectRatio:false,
+        onClick: function(evt, elements){
+          if(!elements.length) return;
+          var el = elements[0];
+          var ds = datasets[el.datasetIndex];
+          if(!ds||!ds._contract) return;
+          var p = PRIORIDADES[el.index];
+          var tipo = ds._tipo;
+          var drillArr = (slaDrillMap[ds._contract.id]||{})[p]||{};
+          var tasks = tipo==='dentro' ? (drillArr.dentro||[]) : (drillArr.fora||[]);
+          openDrill(ds._contract.name+' — SLA '+p+' '+tipo.charAt(0).toUpperCase()+tipo.slice(1)+' SLA', tasks);
+        },
         scales:{
           x:{ grid:{display:false}, ticks:{font:{size:12},color:'#f0f0f0'} },
           y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
@@ -993,7 +1066,8 @@
                 var pct = cnt.total > 0 ? (cnt.dentro/cnt.total*100).toFixed(1) : '—';
                 if(tipo==='dentro') return c.name+' Dentro SLA: '+ctx.parsed.y+' ('+pct+'% aderência)';
                 return c.name+' Fora SLA: '+ctx.parsed.y;
-              }
+              },
+              footer: function(){ return 'Clique para ver lista'; }
             }
           },
           datalabels:{
@@ -1005,35 +1079,64 @@
         layout:{ padding:{top:10} }
       }
     });
+    document.getElementById('chartSlaPrio').style.cursor='pointer';
   }
 
 
 
   /* ── AGING ────────────────────────────────────────────────── */
+  var _agingDrill = []; /* [{contract, bucketIdx, tasks}] — por dataset index */
   function renderAging(){
     destroyChart('aging');
+    _agingDrill = [];
+    var agingNow = Date.now();
+    var datasets = CONTRACTS.map(function(c){
+      var ag = ((ST[c.id].kpis||{}).aging)||AGING_BUCKETS.map(function(){ return 0; });
+      /* Build per-bucket task lists for drilldown */
+      var bucketTasks = AGING_BUCKETS.map(function(){ return []; });
+      var tasks = (ST[c.id].tasks||[]);
+      tasks.forEach(function(t){
+        var s=(t.status||'').trim().toUpperCase();
+        if(s!=='NÃO INICIADO'&&s!=='NAO INICIADO'&&s!=='INICIADO') return;
+        var raw=t.dataCriacaoAS||t.createdAt;
+        var dt=safeDate(raw);
+        if(!dt||isNaN(dt.getTime())) return;
+        var mins=Math.round((agingNow-dt.getTime())/60000);
+        if(mins<0) return;
+        var idx=AGING_BUCKETS.findIndex(function(b){ return mins>=b.min&&mins<b.max; });
+        if(idx>=0) bucketTasks[idx].push(Object.assign({},t,{_contrato:c.name,_color:c.color}));
+      });
+      _agingDrill.push({ contract:c, bucketTasks:bucketTasks });
+      return {
+        label:c.name,
+        data: AGING_BUCKETS.map(function(_,i){ return nn(ag[i]); }),
+        backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5
+      };
+    });
     charts['aging'] = new Chart(document.getElementById('chartAging'),{
       type:'bar',
       data:{
         labels: AGING_BUCKETS.map(function(b){ return b.label; }),
-        datasets: CONTRACTS.map(function(c){
-          var ag = ((ST[c.id].kpis||{}).aging)||AGING_BUCKETS.map(function(){ return 0; });
-          return {
-            label:c.name,
-            data: AGING_BUCKETS.map(function(_,i){ return nn(ag[i]); }),
-            backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5
-          };
-        })
+        datasets: datasets
       },
       options:{
         responsive:true, maintainAspectRatio:false,
+        onClick: function(evt, elements){
+          if(!elements.length) return;
+          var el = elements[0];
+          var entry = _agingDrill[el.datasetIndex];
+          if(!entry) return;
+          var bkt = AGING_BUCKETS[el.index];
+          var tasks = entry.bucketTasks[el.index]||[];
+          openDrill(entry.contract.name+' — Aging '+bkt.label, tasks);
+        },
         scales:{
           x:{ grid:{display:false}, ticks:{font:{size:11},color:'#f0f0f0',maxRotation:45,minRotation:45} },
           y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
         },
         plugins:{
           legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
-          tooltip:TT,
+          tooltip:{...TT, callbacks:{ footer:function(){ return 'Clique para ver lista'; } }},
           datalabels:{
             display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
             anchor:'end', align:'end', color:'#f0f0f0', font:{size:10,weight:'bold'},
@@ -1042,6 +1145,7 @@
         }
       }
     });
+    document.getElementById('chartAging').style.cursor='pointer';
   }
 
 
@@ -1311,11 +1415,12 @@
         listHtml = '<div class="g-empty">'+(updL.semDiario===0 ? '✓ Todas as OSs possuem diário' : 'Sem dados de criação para ordenar')+'</div>';
       } else {
         var maxH = updL.items[0] ? updL.items[0].horasSemUpd : 1;
-        listHtml = '<div class="g-upd-list">' + updL.items.map(function(it) {
+        listHtml = '<div class="g-upd-list">' + updL.items.map(function(it, idx) {
           var cor = it.horasSemUpd > 72 ? '#e74c3c' : it.horasSemUpd > 48 ? '#ff8c00' : it.horasSemUpd > 24 ? '#f39c12' : '#2ecc71';
           var pct = maxH > 0 ? Math.min(100, it.horasSemUpd / maxH * 100) : 0;
           var prioStyle = 'background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;';
-          return '<div class="g-upd-row">'+
+          var drillIdx = c.id+'_'+idx;
+          return '<div class="g-upd-row" style="cursor:pointer" onclick="openUpdItemDrill(\''+c.id+'\',\''+escHtml(it.osNumero).replace(/'/g,"\\'")+'\')" title="Ver detalhes">'+
             '<span class="g-upd-os">'+escHtml(it.osNumero)+'</span>'+
             '<span style="'+prioStyle+'color:var(--primary)">'+escHtml(it.prioridade)+'</span>'+
             '<div style="flex:1;min-width:0">'+
@@ -1323,7 +1428,7 @@
                 '<div style="width:'+pct.toFixed(1)+'%;height:100%;background:'+cor+';border-radius:4px"></div>'+
               '</div>'+
             '</div>'+
-            '<span class="g-upd-time" style="color:'+cor+'">'+fmtHrs(it.horasSemUpd)+'</span>'+
+            '<span class="g-upd-time" style="color:'+cor+'">'+fmtHrs(it.horasSemUpd)+' ↗</span>'+
           '</div>';
         }).join('') + '</div>';
       }
@@ -1354,6 +1459,46 @@
     renderAtualizacoes();
   }
 
+  function openUpdItemDrill(contractId, osNumero) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if(!c) return;
+    var tasks = (ST[c.id].tasks||[]);
+    var task = tasks.find(function(t){
+      return (t.osNumero||t.tskId||t.sequenciaId||'').toString()===osNumero;
+    });
+    if(!task) { openDrill('OS '+osNumero, []); return; }
+    var lastDt = parseLastDiaryDt(task.motivoCancelamento);
+    var rows = [
+      {lbl:'OS / TSK', val: task.osNumero||task.tskId||task.sequenciaId||'—'},
+      {lbl:'Prioridade', val: task.prioridade||'—'},
+      {lbl:'Status', val: task.status||'—'},
+      {lbl:'SLA', val: task.statusSla||'—'},
+      {lbl:'Endereço/Local', val: task.enderecoId||task.nomeLocal||task.endereco||'—'},
+      {lbl:'Criado em', val: fmtDt(task.dataCriacaoAS||task.createdAt)},
+      {lbl:'Vencimento', val: fmtDt(task.vencimentoCalc)},
+      {lbl:'Última atualização', val: lastDt ? lastDt.toLocaleString('pt-BR') : 'Sem diário'},
+      {lbl:'Habilidade/Fila', val: task.habilidadeTrabalho||task.filaAtual||'—'},
+      {lbl:'Tipo Atividade', val: task.tipoAtividade||'—'},
+      {lbl:'Região/ANF', val: task.regiao||task.anf||'—'}
+    ];
+    var html = '<div class="g-modal-list">'+
+      rows.map(function(r){
+        return '<div class="g-modal-item" style="grid-template-columns:140px 1fr">'+
+          '<div class="g-modal-lbl" style="font-weight:700;color:var(--primary)">'+escHtml(r.lbl)+'</div>'+
+          '<div class="g-modal-val">'+escHtml(String(r.val))+'</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+    if(task.motivoCancelamento){
+      var diary = String(task.motivoCancelamento).trim();
+      if(diary){
+        html += '<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:6px">Diário de Trabalho</div>'+
+          '<div style="background:var(--card2);border-radius:8px;padding:10px;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word">'+escHtml(diary.slice(0,2000))+'</div></div>';
+      }
+    }
+    openGModal('Detalhe — '+c.name+' OS '+osNumero, html);
+  }
+
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
@@ -1366,6 +1511,47 @@
   }
   function closeGModal() {
     document.getElementById('gModal').classList.remove('open');
+  }
+
+  /* ── DRILL MODAL UNIVERSAL ────────────────────────────────── */
+  var PRIO_COR = {P1:'#e74c3c',P2:'#f39c12',P3:'#ff8c00',P4:'#3498db',P5:'#8a8a93'};
+  function openDrill(title, tasks) {
+    var sorted = tasks.slice().sort(function(a,b){
+      var pOrd = {P1:0,P2:1,P3:2,P4:3,P5:4};
+      var pA = pOrd[(a.prioridade||'').trim().toUpperCase()];
+      var pB = pOrd[(b.prioridade||'').trim().toUpperCase()];
+      var dP = (pA==null?9:pA)-(pB==null?9:pB);
+      if(dP!==0) return dP;
+      var slaOrd = {'FORA DO SLA':0,'PREDITIVA':1,'DENTRO DO SLA':2};
+      var sA = slaOrd[a.statusSla]!=null ? slaOrd[a.statusSla] : 3;
+      var sB = slaOrd[b.statusSla]!=null ? slaOrd[b.statusSla] : 3;
+      return sA-sB;
+    });
+    var rows = sorted.slice(0,100).map(function(t){
+      var p = (t.prioridade||'').trim().toUpperCase();
+      var slaCor = t.statusSla==='FORA DO SLA'?'#e74c3c':t.statusSla==='DENTRO DO SLA'?'#2ecc71':'#f39c12';
+      var cTag = t._contrato
+        ? '<span style="font-size:9px;font-weight:800;background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px;color:'+(t._color||'var(--muted)')+'">'+escHtml(t._contrato)+'</span>'
+        : '';
+      var prioTag = p
+        ? '<span style="padding:2px 6px;border-radius:5px;font-size:10px;font-weight:800;background:rgba(255,255,255,.05);color:'+(PRIO_COR[p]||'var(--fg)')+'">'+escHtml(p)+'</span>'
+        : '';
+      var local = escHtml(((t.enderecoId||t.nomeLocal||t.endereco||'—').toString()).slice(0,50));
+      var tsk   = escHtml(t.osNumero||t.tskId||t.sequenciaId||'—');
+      var cria  = fmtDt(t.dataCriacaoAS||t.createdAt);
+      return '<div class="g-modal-item" style="grid-template-columns:auto auto 1fr auto auto">'+
+        '<div style="display:flex;align-items:center;gap:4px">'+prioTag+cTag+'</div>'+
+        '<div><div class="g-modal-lbl">OS/TSK</div><div class="g-modal-val">'+tsk+'</div></div>'+
+        '<div><div class="g-modal-lbl">Local</div><div class="g-modal-val" style="font-size:11px;color:var(--muted)">'+local+'</div></div>'+
+        '<div><div class="g-modal-lbl">SLA</div><div class="g-modal-val" style="color:'+slaCor+';font-size:11px">'+escHtml(t.statusSla||t.status||'—')+'</div></div>'+
+        '<div><div class="g-modal-lbl">Criação</div><div class="g-modal-val" style="font-size:10px;color:var(--muted)">'+cria+'</div></div>'+
+      '</div>';
+    }).join('');
+    var more = tasks.length>100
+      ? '<div style="text-align:center;padding:10px;font-size:11px;color:var(--muted)">Exibindo 100 de '+tasks.length+' registros</div>' : '';
+    openGModal(title+' ('+tasks.length+')',
+      tasks.length ? '<div class="g-modal-list">'+rows+'</div>'+more : '<div class="g-empty">Sem registros</div>'
+    );
   }
 
   /* Campo × CCI ────────────────────────────────────────────── */
@@ -1498,8 +1684,11 @@
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
   window.setDonutPrio       = setDonutPrio;
+  window.openDonutDrill     = openDonutDrill;
   window.closeGModal        = closeGModal;
+  window.openDrill          = openDrill;
   window.openSitesForaDrill = openSitesForaDrill;
+  window.openUpdItemDrill   = openUpdItemDrill;
   window.toggleUpdKpiPrio   = toggleUpdKpiPrio;
   window.toggleUpdListPrio  = toggleUpdListPrio;
   renderStrips();
