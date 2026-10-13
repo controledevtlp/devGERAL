@@ -207,6 +207,36 @@
     .g-prod-kpi-val{ font-family:'Sora',sans-serif; font-size:20px; font-weight:800; line-height:1; }
     .g-prod-kpi-lbl{ font-size:9px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:3px; }
 
+    /* Gestão — campo/CCI bar */
+    .g-camp-bar-row { display:flex; height:28px; border-radius:8px; overflow:hidden; margin-bottom:10px; }
+    .g-camp-seg { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; overflow:hidden; transition:width .5s; white-space:nowrap; }
+    /* P1-P5 matrix */
+    .g-prio-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+    .g-prio-tbl th { padding:8px 12px; font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); text-align:center; border-bottom:1px solid var(--border); }
+    .g-prio-tbl th:first-child { text-align:left; min-width:120px; }
+    .g-prio-tbl td { padding:8px 12px; text-align:center; border-bottom:1px solid rgba(255,140,0,.05); }
+    .g-prio-tbl td:first-child { font-size:11px; font-weight:700; color:var(--muted); text-align:left; letter-spacing:.5px; text-transform:uppercase; }
+    .g-prio-tbl tr:hover td { background:rgba(255,255,255,.02); }
+    .g-prio-chip2 { display:inline-flex; align-items:baseline; gap:2px; padding:3px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+    /* Sites fora drill rows */
+    .g-sf-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card2); margin-bottom:5px; cursor:pointer; transition:background .15s; }
+    .g-sf-row:hover { background:rgba(255,140,0,.08); border-color:rgba(255,140,0,.2); }
+    .g-sf-reg { font-weight:700; font-size:12px; min-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .g-sf-bar { flex:1; height:6px; border-radius:6px; background:rgba(255,255,255,.07); overflow:hidden; }
+    .g-sf-bar-fill { height:100%; border-radius:6px; }
+    .g-sf-cnt { font-family:'Sora',sans-serif; font-size:15px; font-weight:800; min-width:32px; text-align:right; }
+    /* Modal */
+    .g-modal-bg { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.72); align-items:center; justify-content:center; }
+    .g-modal-bg.open { display:flex; }
+    .g-modal-box { background:var(--card); border:1px solid var(--border2); border-radius:18px; padding:28px; max-width:740px; width:calc(100% - 32px); max-height:85vh; overflow-y:auto; position:relative; box-shadow:0 24px 80px rgba(0,0,0,.7); }
+    .g-modal-close { position:absolute; top:14px; right:14px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); color:var(--muted); border-radius:8px; padding:4px 12px; cursor:pointer; font-size:13px; transition:color .12s; }
+    .g-modal-close:hover { color:var(--fg); }
+    .g-modal-title { font-family:'Sora',sans-serif; font-size:15px; font-weight:800; margin-bottom:18px; padding-right:40px; }
+    .g-modal-list { display:flex; flex-direction:column; gap:5px; }
+    .g-modal-item { display:grid; gap:8px; padding:9px 12px; border-radius:8px; background:var(--card2); font-size:12px; }
+    .g-modal-item:hover { background:rgba(255,255,255,.04); }
+    .g-modal-lbl { font-size:10px; color:var(--muted); margin-bottom:2px; }
+    .g-modal-val { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* Responsive */
     @media (max-width: 1100px) { .g-6col { grid-template-columns: repeat(3,1fr); } }
     @media (max-width: 960px)  { .g-3col, .g-6col { grid-template-columns: 1fr; } .g-2col { grid-template-columns: 1fr; } }
@@ -252,6 +282,9 @@
   </button>
   <button id="btn-upd" class="g-tab-btn" onclick="switchTab('upd')">
     <span class="g-tab-dot"></span>Atualizações
+  </button>
+  <button id="btn-mgmt" class="g-tab-btn" onclick="switchTab('mgmt')">
+    <span class="g-tab-dot"></span>Gestão
   </button>
 </nav>
 
@@ -361,7 +394,43 @@
 </div>
 </div>
 
+<!-- TAB 6 — GESTÃO -->
+<div id="tab-mgmt" class="g-tab-pane">
+<div class="g-main">
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Produção — Campo × CCI / CCO (todos os contratos)</div>
+    <div class="g-3col" id="campoCciRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Backlog por Prioridade — Situação SLA e Cobertura de Diário</div>
+    <div id="prioMatrixRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>GMGs na Fila — Aguardando Atendimento</div>
+    <div class="g-3col" id="gmgRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Sites Fora — Incidentes Ativos por Região</div>
+    <div class="g-3col" id="sitesForaDrillRow"></div>
+  </div>
+
+</div>
+</div>
+
 </div><!-- /g-wrap -->
+
+<!-- MODAL GESTÃO -->
+<div id="gModal" class="g-modal-bg" onclick="if(event.target===this)closeGModal()">
+  <div class="g-modal-box">
+    <button class="g-modal-close" onclick="closeGModal()">✕</button>
+    <div class="g-modal-title" id="gModalTitle"></div>
+    <div id="gModalBody"></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -524,9 +593,9 @@
       slaByPriority[p] = r.total>0 ? Math.round(r.dentro/r.total*1000)/10 : null;
     });
 
-    /* Backlog por prioridade — dentro/fora/preditiva do backlog atual */
+    /* Backlog por prioridade — dentro/fora/preditiva + cobertura de diário */
     var backlogByPriority={};
-    PRIORIDADES.forEach(function(p){ backlogByPriority[p]={dentro:0,fora:0,preditiva:0,total:0}; });
+    PRIORIDADES.forEach(function(p){ backlogByPriority[p]={dentro:0,fora:0,preditiva:0,total:0,semDiario:0,comDiario:0}; });
     backlog.forEach(function(t){
       var p=(t.prioridade||'').trim().toUpperCase();
       if(!backlogByPriority[p]) return;
@@ -535,6 +604,8 @@
       if(s==='DENTRO DO SLA') backlogByPriority[p].dentro++;
       else if(s==='PREDITIVA')    backlogByPriority[p].preditiva++;
       else if(s==='FORA DO SLA')  backlogByPriority[p].fora++;
+      if(parseLastDiaryDt(t.motivoCancelamento)) backlogByPriority[p].comDiario++;
+      else backlogByPriority[p].semDiario++;
     });
 
     /* Sites fora por região — incidents não resolvidos, com/sem TSK aberta */
@@ -555,6 +626,24 @@
       if(comTsk) incByReg[r].comTsk++; else incByReg[r].semTsk++;
     });
 
+    /* Campo vs CCI/CCO */
+    var campoProd=0,cciProd=0,outroProd=0, campoBl=0,cciBl=0,outroBl=0;
+    completed.forEach(function(t){
+      var ta=(t.tipoAtividade||'').toLowerCase();
+      if(ta.indexOf('campo')>=0) campoProd++;
+      else if(ta.indexOf('cci')>=0||ta.indexOf('cco')>=0) cciProd++;
+      else outroProd++;
+    });
+    backlog.forEach(function(t){
+      var ta=(t.tipoAtividade||'').toLowerCase();
+      if(ta.indexOf('campo')>=0) campoBl++;
+      else if(ta.indexOf('cci')>=0||ta.indexOf('cco')>=0) cciBl++;
+      else outroBl++;
+    });
+
+    /* GMG na fila */
+    var gmgFila=backlog.filter(function(t){ return (t.filaAtual||'').toUpperCase().indexOf('GMG')>=0; }).length;
+
     return {
       backlogTotal:backlog.length, foraSla:foraSla, preditiva:preditiva,
       dentroBl:dentroBl, backlogIndef:indef,
@@ -562,7 +651,10 @@
       slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
       aging:aging,
       slaByRegion:slaByRegion, incidentsByRegion:incByReg,
-      slaByPriority:slaByPriority, backlogByPriority:backlogByPriority
+      slaByPriority:slaByPriority, backlogByPriority:backlogByPriority,
+      campoProd:campoProd, cciProd:cciProd, outroProd:outroProd,
+      campoBl:campoBl, cciBl:cciBl, outroBl:outroBl,
+      gmgFila:gmgFila
     };
   }
 
@@ -621,6 +713,7 @@
     else if(tab==='op')   { renderProd(); renderAging(); renderSitesFora(); }
     else if(tab==='prod') { renderProdutividade(); }
     else if(tab==='upd')  { renderAtualizacoes(); }
+    else if(tab==='mgmt') { renderGestao(); }
   }
 
   /* ── FILTER BUTTONS ───────────────────────────────────────── */
@@ -1403,11 +1496,275 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  /* ── MODAL ──────────────────────────────────────────────────── */
+  function openGModal(title, bodyHtml) {
+    document.getElementById('gModalTitle').textContent = title;
+    document.getElementById('gModalBody').innerHTML = bodyHtml;
+    document.getElementById('gModal').classList.add('open');
+  }
+  function closeGModal() {
+    document.getElementById('gModal').classList.remove('open');
+  }
+
+  /* ── RENDER: GESTÃO ─────────────────────────────────────────── */
+  function renderGestao() {
+    if (!allReady()) return;
+    renderCampoCci();
+    renderPrioMatrix();
+    renderGmg();
+    renderSitesForaDrill();
+  }
+
+  /* Campo × CCI ────────────────────────────────────────────── */
+  function renderCampoCci() {
+    var row = document.getElementById('campoCciRow');
+    if (!row) return;
+    row.innerHTML = '';
+    CONTRACTS.forEach(function(c) {
+      var K = ST[c.id].kpis || {};
+      var div = document.createElement('div');
+      div.className = 'g-card';
+      var campoProd = nn(K.campoProd), cciProd = nn(K.cciProd), outroProd = nn(K.outroProd);
+      var campoBl   = nn(K.campoBl),   cciBl   = nn(K.cciBl),   outroBl   = nn(K.outroBl);
+      var campoTot  = campoProd + campoBl;
+      var cciTot    = cciProd + cciBl;
+      var outroTot  = outroProd + outroBl;
+      var grand     = campoTot + cciTot + outroTot;
+      function pp(n){ return grand > 0 ? (n / grand * 100) : 0; }
+      var campoPct = pp(campoTot), cciPct = pp(cciTot), outroPct = pp(outroTot);
+      var barHtml = grand > 0
+        ? '<div class="g-camp-bar-row">' +
+            (campoTot > 0 ? '<div class="g-camp-seg" style="width:'+campoPct.toFixed(1)+'%;background:'+c.color+';color:#111">Campo '+campoPct.toFixed(0)+'%</div>' : '') +
+            (cciTot   > 0 ? '<div class="g-camp-seg" style="width:'+cciPct.toFixed(1)+'%;background:#3498db;color:#fff">CCI '+cciPct.toFixed(0)+'%</div>' : '') +
+            (outroTot > 0 ? '<div class="g-camp-seg" style="width:'+outroPct.toFixed(1)+'%;background:rgba(255,255,255,.1);color:var(--muted)">Outros '+outroPct.toFixed(0)+'%</div>' : '') +
+          '</div>'
+        : '<div class="g-empty">Sem dados de tipo de atividade</div>';
+      div.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Tipo de Atividade</div>'+
+        barHtml+
+        '<div class="g-prod-kpis" style="grid-template-columns:repeat(3,1fr);margin-top:10px">'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(campoTot)+'</div><div class="g-prod-kpi-lbl">Campo ('+campoPct.toFixed(1)+'%)</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#3498db">'+fmtN(cciTot)+'</div><div class="g-prod-kpi-lbl">CCI/CCO ('+cciPct.toFixed(1)+'%)</div></div>'+
+          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:var(--muted)">'+fmtN(outroTot)+'</div><div class="g-prod-kpi-lbl">Outros ('+outroPct.toFixed(1)+'%)</div></div>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">'+
+          '<span>Concluídas: Campo <b style="color:'+c.color+'">'+campoProd+'</b> · CCI <b style="color:#3498db">'+cciProd+'</b></span>'+
+          '<span>Backlog: Campo <b style="color:'+c.color+'">'+campoBl+'</b> · CCI <b style="color:#3498db">'+cciBl+'</b></span>'+
+        '</div>';
+      row.appendChild(div);
+    });
+  }
+
+  /* P1–P5 matrix ──────────────────────────────────────────── */
+  function renderPrioMatrix() {
+    var container = document.getElementById('prioMatrixRow');
+    if (!container) return;
+    container.innerHTML = '';
+    var card = document.createElement('div');
+    card.className = 'g-card';
+    card.innerHTML = '<div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Backlog ativo · SLA e cobertura de diário por prioridade</div>';
+    var thead = '<thead><tr><th>Contrato / Métrica</th>' +
+      PRIORIDADES.map(function(p){ return '<th>'+p+'<span class="g-prazo-chip">'+PRAZO_LABELS[p]+'</span></th>'; }).join('')+
+    '</tr></thead>';
+    var rows = '';
+    CONTRACTS.forEach(function(c) {
+      var bp = (ST[c.id].kpis||{}).backlogByPriority||{};
+      rows += '<tr><td colspan="6" style="padding:10px 12px 4px;font-family:\'Sora\',sans-serif;font-size:13px;font-weight:800;color:'+c.color+';background:rgba(255,255,255,.01)">'+c.name+'</td></tr>';
+      function chip(v, total, color, bg) {
+        if (!v) return '<span style="color:var(--muted);font-size:11px">—</span>';
+        var pct = total > 0 ? Math.round(v / total * 100) : 0;
+        return '<span class="g-prio-chip2" style="color:'+color+';background:'+bg+'">'+v+'<span style="font-size:9px;opacity:.65"> ·'+pct+'%</span></span>';
+      }
+      rows += '<tr><td>Total Backlog</td>' + PRIORIDADES.map(function(p){
+        var v = (bp[p]||{}).total||0;
+        return '<td><span class="g-prio-chip2" style="color:'+c.color+';background:'+c.color+'18">'+v+'</span></td>';
+      }).join('')+'</tr>';
+      rows += '<tr><td>🔴 Fora do Prazo</td>' + PRIORIDADES.map(function(p){
+        var d = bp[p]||{};
+        return '<td>'+chip(d.fora,d.total,'#e74c3c','rgba(231,76,60,.12)')+'</td>';
+      }).join('')+'</tr>';
+      rows += '<tr><td>🟡 Preditiva</td>' + PRIORIDADES.map(function(p){
+        var d = bp[p]||{};
+        return '<td>'+chip(d.preditiva,d.total,'#f39c12','rgba(243,156,18,.12)')+'</td>';
+      }).join('')+'</tr>';
+      rows += '<tr><td>🟢 Dentro do Prazo</td>' + PRIORIDADES.map(function(p){
+        var d = bp[p]||{};
+        return '<td>'+chip(d.dentro,d.total,'#2ecc71','rgba(46,204,113,.12)')+'</td>';
+      }).join('')+'</tr>';
+      rows += '<tr><td>📋 Sem Diário</td>' + PRIORIDADES.map(function(p){
+        var d = bp[p]||{};
+        if (!d.total) return '<td><span style="color:var(--muted);font-size:11px">—</span></td>';
+        if (!d.semDiario) return '<td><span style="color:#2ecc71;font-size:12px">✓</span></td>';
+        var pct = Math.round(d.semDiario / d.total * 100);
+        return '<td><span class="g-prio-chip2" style="color:var(--muted);background:rgba(255,255,255,.06)">'+d.semDiario+'<span style="font-size:9px;opacity:.65"> ·'+pct+'%</span></span></td>';
+      }).join('')+'</tr>';
+    });
+    var wrap = document.createElement('div');
+    wrap.style.overflowX = 'auto';
+    wrap.innerHTML = '<table class="g-prio-tbl">'+thead+'<tbody>'+rows+'</tbody></table>';
+    card.appendChild(wrap);
+    container.appendChild(card);
+  }
+
+  /* GMG na fila ──────────────────────────────────────────── */
+  var _gmgDrillData = {};
+  function renderGmg() {
+    var row = document.getElementById('gmgRow');
+    if (!row) return;
+    row.innerHTML = '';
+    _gmgDrillData = {};
+    CONTRACTS.forEach(function(c) {
+      var K = ST[c.id].kpis||{};
+      var tasks = ST[c.id].tasks||[];
+      var backlog = tasks.filter(function(t){ return !t.fimCalc && !(t.motivoCancelamento||'').toString().trim(); });
+      var gmgTasks = backlog.filter(function(t){ return (t.filaAtual||'').toUpperCase().indexOf('GMG')>=0; });
+      _gmgDrillData[c.id] = gmgTasks;
+      var gmg = gmgTasks.length;
+      var cor = gmg > 10 ? '#e74c3c' : gmg > 5 ? '#f39c12' : gmg > 0 ? '#ff8c00' : '#2ecc71';
+      var gmgByPrio = {}; PRIORIDADES.forEach(function(p){ gmgByPrio[p]=0; });
+      gmgTasks.forEach(function(t){ var p=(t.prioridade||'').trim().toUpperCase(); if(gmgByPrio[p]!==undefined) gmgByPrio[p]++; });
+      var gmgFora   = gmgTasks.filter(function(t){ return (t.statusSla||'')==='FORA DO SLA'; }).length;
+      var gmgPred   = gmgTasks.filter(function(t){ return (t.statusSla||'')==='PREDITIVA'; }).length;
+      var gmgDentro = gmgTasks.filter(function(t){ return (t.statusSla||'')==='DENTRO DO SLA'; }).length;
+      var prioChips = PRIORIDADES.filter(function(p){ return gmgByPrio[p]>0; }).map(function(p){
+        return '<span class="g-hero-chip" style="color:'+c.color+'">'+p+': '+gmgByPrio[p]+'</span>';
+      }).join('');
+      var div = document.createElement('div');
+      div.className = 'g-card';
+      div.innerHTML =
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — GMG na Fila</div>'+
+        '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">'+
+          '<div style="font-family:\'Sora\',sans-serif;font-size:46px;font-weight:800;color:'+cor+';line-height:1">'+gmg+'</div>'+
+          '<div style="font-size:12px;color:var(--muted);line-height:1.4">TSKs aguardando<br>atendimento GMG</div>'+
+        '</div>'+
+        (prioChips ? '<div class="g-hero-break" style="margin-bottom:10px">'+prioChips+'</div>' : '')+
+        (gmg > 0 ? '<div style="display:flex;gap:12px;font-size:11px;margin-bottom:12px">'+
+          '<span style="color:#e74c3c">Fora SLA: '+gmgFora+'</span>'+
+          '<span style="color:#f39c12">Preditiva: '+gmgPred+'</span>'+
+          '<span style="color:#2ecc71">Dentro: '+gmgDentro+'</span>'+
+        '</div>' : '')+
+        (gmg > 0
+          ? '<button onclick="openGmgDrill(\''+c.id+'\')" style="background:transparent;border:1px solid '+c.color+'55;color:'+c.color+';border-radius:8px;padding:5px 14px;font-size:11px;cursor:pointer;font-weight:700;transition:border-color .12s">Ver lista ↗</button>'
+          : '<div class="g-empty" style="padding:8px 0">✓ Sem GMGs na fila</div>');
+      row.appendChild(div);
+    });
+  }
+
+  function openGmgDrill(contractId) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if (!c) return;
+    var gmgTasks = (_gmgDrillData[contractId]||[]).slice();
+    gmgTasks.sort(function(a,b){
+      var ord={'FORA DO SLA':0,'PREDITIVA':1,'DENTRO DO SLA':2};
+      return (ord[a.statusSla||'']||3)-(ord[b.statusSla||'']||3);
+    });
+    var itemsHtml = gmgTasks.map(function(t){
+      var sla = t.statusSla||'—';
+      var sc = sla==='FORA DO SLA'?'#e74c3c':sla==='PREDITIVA'?'#f39c12':'#2ecc71';
+      return '<div class="g-modal-item" style="grid-template-columns:1.2fr 0.6fr 1.2fr 0.8fr">'+
+        '<div><div class="g-modal-lbl">OS / TSK</div><div class="g-modal-val">'+escHtml(t.osNumero||t.enderecoId||'—')+'</div></div>'+
+        '<div><div class="g-modal-lbl">Prio.</div><div class="g-modal-val">'+escHtml(t.prioridade||'—')+'</div></div>'+
+        '<div><div class="g-modal-lbl">SLA</div><div class="g-modal-val" style="color:'+sc+'">'+escHtml(sla)+'</div></div>'+
+        '<div><div class="g-modal-lbl">Fila Atual</div><div class="g-modal-val" style="font-size:11px">'+escHtml(t.filaAtual||'—')+'</div></div>'+
+      '</div>';
+    }).join('');
+    openGModal('GMG na Fila — '+c.name+' ('+gmgTasks.length+' TSKs)',
+      gmgTasks.length ? '<div class="g-modal-list">'+itemsHtml+'</div>' : '<div class="g-empty">Sem GMGs na fila</div>'
+    );
+  }
+
+  /* Sites Fora com drilldown ──────────────────────────────── */
+  var _sfDrillData = {};
+  function renderSitesForaDrill() {
+    var row = document.getElementById('sitesForaDrillRow');
+    if (!row) return;
+    row.innerHTML = '';
+    _sfDrillData = {};
+    CONTRACTS.forEach(function(c) {
+      var K = ST[c.id].kpis||{};
+      var incsAtivos = (ST[c.id].incs||[]).filter(function(i){ return (i.statusTrat||'ATIVO').toUpperCase()!=='RESOLVIDO'; });
+      var ibr = K.incidentsByRegion||{};
+      var regs = Object.keys(ibr).sort(function(a,b){ return (ibr[b].total||0)-(ibr[a].total||0); });
+      var maxR = regs.length ? (ibr[regs[0]].total||0) : 0;
+      var comTskTot=0, semTskTot=0;
+      regs.forEach(function(r){ comTskTot+=(ibr[r].comTsk||0); semTskTot+=(ibr[r].semTsk||0); });
+      var total = nn(K.sitesForaAtivos);
+      /* store drilldown data indexed by region */
+      _sfDrillData[c.id] = {};
+      regs.forEach(function(r){
+        _sfDrillData[c.id][r] = incsAtivos.filter(function(i){ return c.region(i)===r; });
+      });
+      var listHtml = '';
+      if (!regs.length) {
+        listHtml = '<div class="g-empty">✓ Nenhum site fora</div>';
+      } else {
+        listHtml = regs.map(function(r, idx) {
+          var v = ibr[r]; var pct = maxR>0 ? v.total/maxR*100 : 0;
+          var comPct = v.total>0 ? Math.round(v.comTsk/v.total*100) : 0;
+          var safeR = r.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          return '<div class="g-sf-row" onclick="openSitesForaDrill(\''+c.id+'\',\''+safeR+'\')">'+
+            '<span class="g-sf-reg" style="color:'+c.color+'">'+escHtml(r)+'</span>'+
+            '<div class="g-sf-bar"><div class="g-sf-bar-fill" style="width:'+pct.toFixed(1)+'%;background:'+c.color+'"></div></div>'+
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">'+
+              '<span class="g-sf-cnt" style="color:#e74c3c">'+v.total+'</span>'+
+              '<span style="font-size:9px;color:var(--muted)">'+comPct+'% c/TSK</span>'+
+            '</div>'+
+          '</div>';
+        }).join('');
+      }
+      var div = document.createElement('div');
+      div.className = 'g-card';
+      div.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'+
+          '<div class="g-ct" style="margin-bottom:0"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Sites Fora</div>'+
+          '<div style="font-family:\'Sora\',sans-serif;font-size:30px;font-weight:800;color:#e74c3c;line-height:1">'+total+'</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">'+
+          '<span style="color:#2ecc71">● '+comTskTot+' com TSK</span>'+
+          '<span style="color:#e74c3c">● '+semTskTot+' sem TSK</span>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Clique em uma região para ver a lista</div>'+
+        listHtml;
+      row.appendChild(div);
+    });
+  }
+
+  function openSitesForaDrill(contractId, regiao) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if (!c) return;
+    var incs = ((_sfDrillData[contractId]||{})[regiao]||[]).slice();
+    incs.sort(function(a,b){ return (b.duracaoMin||0)-(a.duracaoMin||0); });
+    function fmtDur(min){
+      if(!min) return '—';
+      if(min>=1440) return (min/1440).toFixed(1)+'d';
+      if(min>=60)   return (min/60).toFixed(1)+'h';
+      return min+'min';
+    }
+    var itemsHtml = incs.map(function(i){
+      var comTsk = (i.enderecoId&&ST[contractId]&&ST[contractId].tasks||[]).some(function(t){
+        return !t.fimCalc&&(t.enderecoId||'').toString().trim().toUpperCase()===(i.enderecoId||'').toString().trim().toUpperCase();
+      });
+      return '<div class="g-modal-item" style="grid-template-columns:1fr 1fr 0.7fr">'+
+        '<div><div class="g-modal-lbl">Endereço / Site</div><div class="g-modal-val">'+escHtml(i.enderecoId||i.siteId||'—')+'</div></div>'+
+        '<div><div class="g-modal-lbl">Tipo</div><div class="g-modal-val" style="font-size:11px">'+escHtml(i.tipoIncidente||i.tipo||i.statusTrat||'—')+'</div></div>'+
+        '<div><div class="g-modal-lbl">Duração / TSK</div><div class="g-modal-val" style="color:#e74c3c">'+fmtDur(i.duracaoMin)+
+          (comTsk ? ' <span style="color:#2ecc71;font-size:10px">● TSK</span>' : ' <span style="color:#e74c3c;font-size:10px">sem TSK</span>')+
+        '</div></div>'+
+      '</div>';
+    }).join('');
+    openGModal('Sites Fora — '+c.name+' / '+regiao+' ('+incs.length+')',
+      incs.length ? '<div class="g-modal-list">'+itemsHtml+'</div>' : '<div class="g-empty">Sem dados para esta região</div>'
+    );
+  }
+
   /* ── BOOT ─────────────────────────────────────────────────── */
   window.switchTab          = switchTab;
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
   window.setDonutPrio       = setDonutPrio;
+  window.closeGModal        = closeGModal;
+  window.openGmgDrill       = openGmgDrill;
+  window.openSitesForaDrill = openSitesForaDrill;
   renderStrips();
   renderFilterButtons();
   renderHeroKpis();
