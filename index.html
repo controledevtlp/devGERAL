@@ -536,7 +536,7 @@
     /* Aging — dataCriacaoAS em minutos, 9 faixas (igual aos dashboards públicos) */
     var aging = AGING_BUCKETS.map(function(){ return 0; });
     backlog.forEach(function(t){
-      var raw = t.dataCriacaoAS || t.createdAt;
+      var raw = t.dataCriacaoAS || t.dataCriacao || t.createdAt;
       var dt  = safeDate(raw);
       if(!dt || isNaN(dt.getTime())) return;
       var mins = Math.round((now - dt.getTime()) / 60000);
@@ -645,7 +645,7 @@
         if(!res.ok) throw new Error(res.error||'Resposta inválida');
         var tasks = (res.data&&res.data.tasksEnriched) ? res.data.tasksEnriched : [];
         var incs  = (res.data&&res.data.incidentsEnriched) ? res.data.incidentsEnriched : [];
-        ST[c.id]={ loading:false, kpis:computeKpis(tasks,incs,c.region), savedAt:res.savedAt||null, error:null, tasks:tasks, incs:incs };
+        ST[c.id]={ loading:false, kpis:computeKpis(tasks,incs,c.region), savedAt:res.savedAt||null, error:null, tasks:tasks, incs:incs, prodHistory:(res.data&&res.data.prodHistory)||null };
         render();
       })
       .catch(function(err){
@@ -1098,7 +1098,7 @@
       tasks.forEach(function(t){
         var s=(t.status||'').trim().toUpperCase();
         if(s!=='NÃO INICIADO'&&s!=='NAO INICIADO'&&s!=='INICIADO') return;
-        var raw=t.dataCriacaoAS||t.createdAt;
+        var raw=t.dataCriacaoAS||t.dataCriacao||t.createdAt;
         var dt=safeDate(raw);
         if(!dt||isNaN(dt.getTime())) return;
         var mins=Math.round((agingNow-dt.getTime())/60000);
@@ -1192,6 +1192,25 @@
     });
   }
 
+  /* ── COMPUTE: encerramentos diários a partir do histórico (prodHistory) ── */
+  function computeProdDiarioFromHistory(hist, days) {
+    days = days || 30;
+    var now = Date.now();
+    var limite = now - days * 864e5;
+    return Object.keys(hist).filter(function(d) {
+      return new Date(d + 'T12:00:00').getTime() >= limite;
+    }).sort().map(function(d) {
+      var v = hist[d];
+      var dentro = v.dentro || 0;
+      var fora   = v.fora   != null ? v.fora : (v.total || 0) - dentro;
+      var total  = v.total  || (dentro + fora);
+      var dt2    = new Date(d + 'T12:00:00');
+      var label  = dt2.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return { dia: d, label: label, dentro: dentro, fora: fora, total: total,
+               pct: total > 0 ? Math.round(dentro / total * 1000) / 10 : null };
+    });
+  }
+
   /* ── COMPUTE: perdas de prazo por hora ───────────────────── */
   function computePerdaHora(tasks) {
     var hrs = new Array(24).fill(0);
@@ -1229,7 +1248,7 @@
         if (h > 48) risco48++;
       } else {
         semDiario++;
-        var createDt = safeDate(t.dataCriacaoAS || t.createdAt);
+        var createDt = safeDate(t.dataCriacaoAS || t.dataCriacao || t.createdAt);
         if (createDt) {
           semDiarioItems.push({
             osNumero: t.osNumero || t.enderecoId || '—',
@@ -1257,7 +1276,8 @@
 
     CONTRACTS.forEach(function(c) {
       var tasks = (ST[c.id].tasks) || [];
-      var dias  = computeProdDiario(tasks, 30);
+      var hist  = ST[c.id].prodHistory;
+      var dias  = hist ? computeProdDiarioFromHistory(hist, 30) : computeProdDiario(tasks, 30);
       var perda = computePerdaHora(tasks);
 
       // ── Encerramentos por dia ──
@@ -1538,7 +1558,7 @@
         : '';
       var local = escHtml(((t.enderecoId||t.nomeLocal||t.endereco||'—').toString()).slice(0,50));
       var tsk   = escHtml(t.osNumero||t.tskId||t.sequenciaId||'—');
-      var cria  = fmtDt(t.dataCriacaoAS||t.createdAt);
+      var cria  = fmtDt(t.dataCriacaoAS||t.dataCriacao||t.createdAt);
       return '<div class="g-modal-item" style="grid-template-columns:auto auto 1fr auto auto">'+
         '<div style="display:flex;align-items:center;gap:4px">'+prioTag+cTag+'</div>'+
         '<div><div class="g-modal-lbl">OS/TSK</div><div class="g-modal-val">'+tsk+'</div></div>'+
