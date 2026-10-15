@@ -313,7 +313,7 @@
   </div>
 
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Produção — Campo × CCI / CCO (todos os contratos)</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Produção — Campo × CCI / CCO (encerradas, regra de fila de cada contrato)</div>
     <div class="g-3col" id="campoCciRow"></div>
   </div>
 
@@ -384,7 +384,7 @@
   </div>
 
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>OSs Mais Tempo Sem Atualização</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>OSs Mais Tempo Sem Atualização — recentes no topo, mais antigas no final</div>
     <div class="g-3col" id="updListRow"></div>
   </div>
 
@@ -419,7 +419,9 @@
       color:'#ff8c00', alpha:'rgba(255,140,0,',
       url:'https://script.google.com/macros/s/AKfycbxu2uWr0zWK9ozBJ9a8_d95j6_SDeSJTZPtm3R8zinn_ZFZBNYK6FcHT6SNilN16VOZ/exec',
       dash:'https://controledevtlp.github.io/devTRJ/dashboard-publico.html',
-      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; }
+      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; },
+      /* CCI = fila do operador (igual ao classificarCciCampo do domain.js do TRJ) */
+      isCci:function(t){ return normTxt(t.filaAtual).indexOf('OPERADOR_')>=0; }
     },
     {
       id:'tmg', name:'TMG', label:'Minas Gerais', sub:'8 ANFs · ANF31–ANF38',
@@ -427,14 +429,18 @@
       url:'https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec',
       dash:null,
       /* tarefas trazem regiao='ANF31'; incidentes trazem anf='33' e regiao='ANF33' */
-      region:function(t){ return (t.regiao||(t.anf?'ANF'+t.anf:'')).toString().trim()||'SEM ANF'; }
+      region:function(t){ return (t.regiao||(t.anf?'ANF'+t.anf:'')).toString().trim()||'SEM ANF'; },
+      /* TMG: filas CENTRALIZADO* e COMMAND_CENTER_FMMT_31..38 */
+      isCci:function(t){ var n=normTxt(t.filaAtual); return n.indexOf('CENTRALIZADO')>=0||n.indexOf('COMMAND_CENTER')>=0; }
     },
     {
       id:'tne', name:'TNE', label:'Nordeste', sub:'8 estados · PE/PB/CE/RN/PI/SE/AL/BA',
       color:'#2ecc71', alpha:'rgba(46,204,113,',
       url:'https://script.google.com/macros/s/AKfycbwSPcNv-9o5xNf__chQquuhIGJyn2ff4BNYb8iPCnS2rOq2GClb3sfRrY2_j9JX8mgoOA/exec',
       dash:null,
-      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; }
+      region:function(t){ return (t.regiao||'').trim()||'SEM REGIÃO'; },
+      /* TNE: COMMAND_CENTER_FMMT_<UF>, CENTRALIZADO_FMT_TNE e "COMMAND CENTER - FMM" */
+      isCci:function(t){ var n=normTxt(t.filaAtual); return n.indexOf('COMMAND_CENTER_FMMT_')>=0||n.indexOf('CENTRALIZADO_FMT_TNE')>=0||n.indexOf('COMMAND CENTER')>=0; }
     }
   ];
 
@@ -717,7 +723,7 @@
 
   /* ── COMPUTE ──────────────────────────────────────────────── */
   /* cls = classify(tasks) — mesma base do Comp.dashboard do dashboard público */
-  function computeKpis(cls, incidents, regionFn) {
+  function computeKpis(cls, incidents, regionFn, cciFn) {
     var Z = {
       backlogTotal:0, foraSla:0, preditiva:0, predBl:0, dentroBl:0, backlogIndef:0,
       prodTotal:0, prodDentro:0, prodFora:0, encBase:0, slaGeral:0, sitesForaAtivos:0,
@@ -807,10 +813,21 @@
       if(e && endsComTsk[e]) incByReg[r].comTsk++; else incByReg[r].semTsk++;
     });
 
-    /* Campo × CCI — pela fila (OPERADOR_ = CCI), igual ao público; tipoAtividade é sempre "Manutenção Corretiva" */
+    /* Campo × CCI — pela FILA, com a regra de cada contrato (c.isCci = classificarCciCampo do domain.js do contrato).
+       Produção = concluídas; separadas em dentro/fora/preditiva como o gráfico "Produtividade" do público
+       (preditiva encerrada conta à parte; sem fimCalc/vencimento não entra em dentro/fora, mas conta no total). */
+    cciFn = cciFn || isCci;
     var campoProd=0,cciProd=0, campoBl=0,cciBl=0;
-    concl.forEach(function(t){ if(isCci(t)) cciProd++; else campoProd++; });
-    backlog.forEach(function(t){ if(isCci(t)) cciBl++; else campoBl++; });
+    var prodCat = { Geral:{dentro:0,fora:0,preditiva:0,semPrazo:0}, CCI:{dentro:0,fora:0,preditiva:0,semPrazo:0}, Campo:{dentro:0,fora:0,preditiva:0,semPrazo:0} };
+    concl.forEach(function(t){
+      var cat = cciFn(t) ? 'CCI' : 'Campo';
+      if(cat==='CCI') cciProd++; else campoProd++;
+      var k;
+      if(isPred(t)) k='preditiva';
+      else { var r=encDentro(t); k = r===null ? 'semPrazo' : (r ? 'dentro' : 'fora'); }
+      prodCat[cat][k]++; prodCat.Geral[k]++;
+    });
+    backlog.forEach(function(t){ if(cciFn(t)) cciBl++; else campoBl++; });
 
     /* GMG na fila — campo habilidadeTrabalho (vai no snapshot a partir da próxima publicação) */
     var gmgFila = tickets.filter(function(t){ return isBacklogSt(t) && isGmg(t); }).length;
@@ -823,7 +840,7 @@
       aging:aging,
       slaByRegion:slaByRegion, incidentsByRegion:incByReg,
       slaByPriority:slaByPriority, slaCntPrio:slaCntPrio, backlogByPriority:backlogByPriority,
-      campoProd:campoProd, cciProd:cciProd, outroProd:0,
+      campoProd:campoProd, cciProd:cciProd, outroProd:0, prodCat:prodCat,
       campoBl:campoBl, cciBl:cciBl, outroBl:0,
       gmgFila:gmgFila
     };
@@ -841,13 +858,16 @@
           /* data:null = snapshot ausente/corrompido no Apps Script — NÃO exibir como "tudo zerado" */
           var dg=res.diag||{};
           var det=dg.motivo||(dg.linhasCorrompidas&&dg.linhasCorrompidas.length?'chunks corrompidos (linhas '+dg.linhasCorrompidas.slice(0,3).join(', ')+')':dg.parseErro?('JSON inválido: '+dg.parseErro):'');
-          throw new Error('Snapshot indisponível'+(det?' — '+det:'')+'. Abra o Dashboard do contrato para republicar.');
+          var desatualizado = !res.gs;   // só o Apps Script novo devolve "gs" (versão) — sem ele, o código publicado é o antigo
+          throw new Error('Snapshot indisponível'+(det?' — '+det:'')+
+            (desatualizado ? '. O Apps Script publicado deste contrato está desatualizado: cole o código novo e publique uma NOVA VERSÃO da implantação, depois abra o Dashboard do contrato.'
+                           : '. Abra o Dashboard do contrato para republicar.'));
         }
         var d = res.data;
         var tasks = Array.isArray(d.tasksEnriched) ? d.tasksEnriched : [];
         var incs  = Array.isArray(d.incidentsEnriched) ? d.incidentsEnriched : [];
         var cls   = classify(tasks);
-        ST[c.id]={ loading:false, kpis:computeKpis(cls,incs,c.region), savedAt:res.savedAt||null, error:null,
+        ST[c.id]={ loading:false, kpis:computeKpis(cls,incs,c.region,c.isCci), savedAt:res.savedAt||null, error:null,
                    tasks:tasks, incs:incs, cls:cls,
                    prodHistory:(d.prodHistory&&Object.keys(d.prodHistory).length)?d.prodHistory:null };
         render();
@@ -942,7 +962,7 @@
             '<span class="g-strip-st" style="color:'+dc+'">'+tx+'</span>'+
           '</div>'+
           (s.error
-            ? '<div class="g-strip-ts" style="color:#e74c3c;max-width:260px;white-space:normal;line-height:1.3" title="'+escHtml(s.error)+'">'+escHtml(s.error.slice(0,110))+'</div>'
+            ? '<div class="g-strip-ts" style="color:#e74c3c;max-width:260px;white-space:normal;line-height:1.3" title="'+escHtml(s.error)+'">'+escHtml(s.error.slice(0,240))+'</div>'
             : '<div class="g-strip-ts">'+fmtDtFull(s.savedAt)+'</div>')+
         '</div>'+
       '</div>';
@@ -1380,16 +1400,38 @@
     return p.length >= 3 ? p[2] + '/' + p[1] : iso;
   }
 
+  /* ── FILTROS DE PRIORIDADE (aba Produtividade) ───────────────
+     Mesma chave do histórico do público: 'P1'…'P5' ou 'PREDITIVA' (preditiva encerrada não conta na prioridade). */
+  var PROD_PRIOS_DIA   = ['P1','P2','P3','P4','P5','PREDITIVA'];
+  var PROD_PRIOS_PERDA = ['P1','P2','P3','P4','P5'];
+  var prodPrio = { daily:{ trj:null, tmg:null, tne:null }, perda:{ trj:null, tmg:null, tne:null } };
+  function prioKeyOf(t) { return isPred(t) ? 'PREDITIVA' : (up(t.prioridade) || 'S/PRIO'); }
+  function prodChipsHtml(kind, c, sel, lista) {
+    var opts = [{ k:null, l:'Todas' }].concat(lista.map(function(p) { return { k:p, l:(p==='PREDITIVA'?'PRED.':p) }; }));
+    return '<div class="g-prio-row" style="margin:0 0 10px">' + opts.map(function(o) {
+      var active = (sel || null) === o.k;
+      var style = active
+        ? 'background:'+c.color+';color:#111;border-color:'+c.color+';font-weight:800;'
+        : 'color:'+c.color+'99;border-color:'+c.color+'44;';
+      return '<button class="g-prio-btn" style="'+style+'" onclick="setProdPrio(\''+kind+'\',\''+c.id+'\','+(o.k?"'"+o.k+"'":'null')+')">'+o.l+'</button>';
+    }).join('') + '</div>';
+  }
+  function setProdPrio(kind, contractId, prio) {
+    prodPrio[kind][contractId] = prio || null;
+    renderProdutividade();
+  }
+
   /* ── COMPUTE: encerramentos diários (últimos N dias) ────────
      Concluída (1 linha por TSK) agrupada pelo DIA LOCAL do fimCalc; dentro = fimCalc <= vencimentoCalc.
      (toISOString() usava UTC: encerramento após 21h caía no dia seguinte; e statusSla vira
      'CONCLUIDO' ao encerrar, então a regra antiga marcava tudo como "fora".) */
-  function computeProdDiario(cls, days) {
+  function computeProdDiario(cls, days, prio) {
     days = days || 30;
     var limite = Date.now() - days * 864e5;
     var byDay = {};
     ((cls && cls.dedup) || []).forEach(function(t) {
       if (!isConcluida(t)) return;
+      if (prio && prioKeyOf(t) !== prio) return;
       var dt = safeDate(t.fimCalc);
       if (!dt || dt.getTime() < limite) return;
       var d = localDay(dt);
@@ -1408,27 +1450,30 @@
   }
 
   /* ── COMPUTE: histórico (prodHistory) + dia de hoje ao vivo ──
-     O histórico guarda dias fechados; "hoje" sempre vem das tarefas (igual à aba Produtividade do público). */
-  function computeProdDiarioFromHistory(hist, cls, days) {
+     O histórico guarda dias fechados (com quebra por prioridade em row.f['TODAS|P1']…);
+     "hoje" sempre vem das tarefas (igual à aba Produtividade do público). */
+  function computeProdDiarioFromHistory(hist, cls, days, prio) {
     days = days || 30;
     var limite = Date.now() - days * 864e5;
     var hoje = localDay(new Date());
-    var live = computeProdDiario(cls, days);
+    var live = computeProdDiario(cls, days, prio);
     var byDay = {};
     Object.keys(hist).forEach(function(d) {
       var dd = safeDate(d);
       if (!dd || dd.getTime() + 864e5 < limite) return;
-      var v = hist[d] || {};
+      var row = hist[d] || {};
+      var v = prio ? ((row.f && row.f['TODAS|' + prio]) || null) : row;
+      if (!v) return;
       var dentro = v.dentro || 0;
       var fora   = v.fora != null ? v.fora : Math.max(0, (v.total || 0) - dentro);
       byDay[d] = { dentro: dentro, fora: fora };
     });
-    if (live[hoje]) byDay[hoje] = live[hoje];
+    if (live[hoje]) byDay[hoje] = live[hoje]; else if (prio) delete byDay[hoje];
     return diasFromMap(byDay);
   }
 
   /* ── COMPUTE: perdas de prazo por hora do vencimento ─────── */
-  function computePerdaHora(cls) {
+  function computePerdaHora(cls, prio) {
     var hrs = new Array(24).fill(0);
     var total = 0;
     ((cls && cls.dedup) || []).forEach(function(t) {
@@ -1437,31 +1482,35 @@
       var foraConcl = isConcluida(t) && encDentro(t) === false;
       var foraAtivo = !isConcluida(t) && !isCancelada(t) && t.statusSla === 'FORA DO SLA';
       if (!foraConcl && !foraAtivo) return;
+      if (prio && (up(t.prioridade) || 'S/PRIO') !== prio) return;
       hrs[venc.getHours()]++;
       total++;
     });
     return { hrs: hrs, total: total };
   }
 
-  /* ── COMPUTE: estatísticas de atualização (backlog ativo) ─── */
+  /* ── COMPUTE: estatísticas de atualização (backlog ativo) ───
+     lists.* guardam as próprias tarefas (com _lastDt/_h) para o drilldown dos indicadores. */
   function computeUpdStats(cls, prioFilter) {
     var now = Date.now();
     var openTasks = (cls && cls.backlog) || [];
     if (prioFilter && prioFilter.length > 0) {
       openTasks = openTasks.filter(function(t) { return prioFilter.indexOf(up(t.prioridade)) >= 0; });
     }
-    var comDiario = 0, semDiario = 0, risco24 = 0, risco48 = 0;
+    var lists = { com: [], sem: [], r24: [], r48: [] };
     var semDiarioItems = [];
     openTasks.forEach(function(t) {
       var lastDt = lastUpdDt(t.motivoCancelamento);
       if (lastDt) {
-        comDiario++;
         var h = (now - lastDt.getTime()) / 3600000;
-        if (h > 24) risco24++;
-        if (h > 48) risco48++;
+        var o = Object.assign({}, t, { _lastDt: lastDt, _h: h });
+        lists.com.push(o);
+        if (h > 24) lists.r24.push(o);
+        if (h > 48) lists.r48.push(o);
       } else {
-        semDiario++;
         var createDt = safeDate(t.dataCriacaoAS || t.dataCriacao);
+        var os = Object.assign({}, t, { _lastDt: null, _h: createDt ? (now - createDt.getTime()) / 3600000 : null });
+        lists.sem.push(os);
         if (createDt) {
           semDiarioItems.push({
             osNumero: t.osNumero || t.enderecoId || '—',
@@ -1473,11 +1522,13 @@
         }
       }
     });
-    semDiarioItems.sort(function(a, b) { return b.horasSemUpd - a.horasSemUpd; });
+    /* mais recentes (caíram agora) no topo; as mais antigas sempre no final */
+    semDiarioItems.sort(function(a, b) { return a.horasSemUpd - b.horasSemUpd; });
     var avgH = semDiarioItems.length
       ? semDiarioItems.reduce(function(s, i) { return s + i.horasSemUpd; }, 0) / semDiarioItems.length
       : 0;
-    return { comDiario: comDiario, semDiario: semDiario, risco24: risco24, risco48: risco48, avgH: avgH, items: semDiarioItems.slice(0, 20) };
+    return { comDiario: lists.com.length, semDiario: lists.sem.length, risco24: lists.r24.length, risco48: lists.r48.length,
+             avgH: avgH, items: semDiarioItems, lists: lists };
   }
 
   /* ── RENDER: PRODUTIVIDADE ────────────────────────────────── */
@@ -1499,9 +1550,10 @@
       }
       var cls   = ST[c.id].cls;
       var hist  = ST[c.id].prodHistory;
-      var dias  = diasFromMap(computeProdDiario(cls, 30));
-      if (hist) dias = computeProdDiarioFromHistory(hist, cls, 30);
-      var perda = computePerdaHora(cls);
+      var selD  = prodPrio.daily[c.id];
+      var selP  = prodPrio.perda[c.id];
+      var dias  = hist ? computeProdDiarioFromHistory(hist, cls, 30, selD) : diasFromMap(computeProdDiario(cls, 30, selD));
+      var perda = computePerdaHora(cls, selP);
 
       // ── Encerramentos por dia ──
       var totEnc = dias.reduce(function(s, d) { return s + d.total; }, 0);
@@ -1512,14 +1564,15 @@
       var divD = document.createElement('div');
       divD.className = 'g-card';
       divD.innerHTML =
-        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Últimos 30 dias</div>'+
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Últimos 30 dias'+(selD?' · '+(selD==='PREDITIVA'?'Preditiva':selD):'')+'</div>'+
+        prodChipsHtml('daily', c, selD, PROD_PRIOS_DIA)+
         '<div class="g-prod-kpis">'+
           '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(totEnc)+'</div><div class="g-prod-kpi-lbl">Encerradas</div></div>'+
           '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#2ecc71">'+fmtN(totDen)+'</div><div class="g-prod-kpi-lbl">Dentro SLA</div></div>'+
           '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+pctCor+'">'+slaMedia.toFixed(1)+'%</div><div class="g-prod-kpi-lbl">SLA Médio</div></div>'+
         '</div>'+
         (dias.length ? '<div class="g-cbox" style="height:200px;"><canvas id="prodD_'+c.id+'"></canvas></div>'
-                     : '<div class="g-empty">Sem encerramentos no período</div>');
+                     : '<div class="g-empty">Sem encerramentos'+(selD?' para este filtro':' no período')+'</div>');
       rowD.appendChild(divD);
 
       if (dias.length) {
@@ -1566,11 +1619,12 @@
       var hrPico = 0, hrPicoCount = 0;
       perda.hrs.forEach(function(c2, hr) { if (c2 > hrPicoCount) { hrPicoCount = c2; hrPico = hr; } });
       divP.innerHTML =
-        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Vencimentos fora do SLA por hora</div>'+
+        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Vencimentos fora do SLA por hora'+(selP?' · '+selP:'')+'</div>'+
+        prodChipsHtml('perda', c, selP, PROD_PRIOS_PERDA)+
         (perda.total > 0
           ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+perda.total+' perdas · pico às '+hrPico+'h ('+hrPicoCount+')</div>'+
             '<div class="g-cbox" style="height:180px;"><canvas id="prodP_'+c.id+'"></canvas></div>'
-          : '<div class="g-empty">Sem perdas de prazo no período</div>');
+          : '<div class="g-empty">Sem perdas de prazo'+(selP?' para este filtro':' no período')+'</div>');
       rowP.appendChild(divP);
 
       if (perda.total > 0) {
@@ -1637,6 +1691,11 @@
       var updL  = computeUpdStats(cls, updPrioFilterList[c.id]);
 
       var riscoColor = updK.risco24 > 0 ? '#e74c3c' : '#2ecc71';
+      /* indicadores clicáveis → drilldown com as OSs que compõem o número */
+      function kpiTile(kind, val, cor, lbl) {
+        var click = val > 0 ? ' style="cursor:pointer" title="Ver as OSs" onclick="openUpdListDrill(\''+c.id+'\',\''+kind+'\')"' : '';
+        return '<div class="g-prod-kpi"'+click+'><div class="g-prod-kpi-val" style="color:'+cor+'">'+val+'</div><div class="g-prod-kpi-lbl">'+lbl+(val>0?' ↗':'')+'</div></div>';
+      }
 
       // KPI card
       var divK = document.createElement('div');
@@ -1648,17 +1707,17 @@
           '<div class="g-prio-row" style="margin-bottom:0">'+_prioBtnsUpd(c.id, updPrioFilterKpi[c.id], 'toggleUpdKpiPrio')+'</div>'+
         '</div>'+
         '<div class="g-prod-kpis" style="margin-top:10px">'+
-          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#2ecc71">'+updK.comDiario+'</div><div class="g-prod-kpi-lbl">Com diário</div></div>'+
-          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#e74c3c">'+updK.semDiario+'</div><div class="g-prod-kpi-lbl">Sem diário</div></div>'+
-          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+riscoColor+'">'+updK.risco24+'</div><div class="g-prod-kpi-lbl">&gt;24h sem upd.</div></div>'+
+          kpiTile('com',  updK.comDiario, '#2ecc71', 'Com diário')+
+          kpiTile('sem',  updK.semDiario, '#e74c3c', 'Sem diário')+
+          kpiTile('r24',  updK.risco24,   riscoColor, '&gt;24h sem upd.')+
         '</div>'+
         '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);padding-top:6px;border-top:1px solid var(--border);margin-top:8px">'+
-          '<span>&gt;48h crítico: <b style="color:'+(updK.risco48>0?'#e74c3c':'#2ecc71')+'">'+updK.risco48+'</b></span>'+
+          '<span'+(updK.risco48>0?' style="cursor:pointer" title="Ver as OSs" onclick="openUpdListDrill(\''+c.id+'\',\'r48\')"':'')+'>&gt;48h crítico: <b style="color:'+(updK.risco48>0?'#e74c3c':'#2ecc71')+'">'+updK.risco48+'</b>'+(updK.risco48>0?' ↗':'')+'</span>'+
           (updPrioFilterKpi[c.id].length ? '<span style="color:var(--primary);font-size:10px">Filtro: '+updPrioFilterKpi[c.id].join(', ')+'</span>' : '')+
         '</div>';
       rowK.appendChild(divK);
 
-      // Lista de OSs sem diário
+      // Lista de OSs sem diário — mais recentes no topo, mais antigas sempre no final
       var divL = document.createElement('div');
       divL.id = 'updListCard_'+c.id;
       divL.className = 'g-card';
@@ -1666,12 +1725,11 @@
       if (!updL.items.length) {
         listHtml = '<div class="g-empty">'+(updL.semDiario===0 ? '✓ Todas as OSs possuem diário' : 'Sem dados de criação para ordenar')+'</div>';
       } else {
-        var maxH = updL.items[0] ? updL.items[0].horasSemUpd : 1;
-        listHtml = '<div class="g-upd-list">' + updL.items.map(function(it, idx) {
+        var maxH = updL.items[updL.items.length-1].horasSemUpd || 1;   // a última é a mais antiga
+        listHtml = '<div class="g-upd-list">' + updL.items.map(function(it) {
           var cor = it.horasSemUpd > 72 ? '#e74c3c' : it.horasSemUpd > 48 ? '#ff8c00' : it.horasSemUpd > 24 ? '#f39c12' : '#2ecc71';
           var pct = maxH > 0 ? Math.min(100, it.horasSemUpd / maxH * 100) : 0;
           var prioStyle = 'background:rgba(255,255,255,.05);padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;';
-          var drillIdx = c.id+'_'+idx;
           return '<div class="g-upd-row" style="cursor:pointer" onclick="openUpdItemDrill(\''+c.id+'\',\''+escHtml(it.osNumero).replace(/'/g,"\\'")+'\')" title="Ver detalhes">'+
             '<span class="g-upd-os">'+escHtml(it.osNumero)+'</span>'+
             '<span style="'+prioStyle+'color:var(--primary)">'+escHtml(it.prioridade)+'</span>'+
@@ -1689,12 +1747,53 @@
           '<div class="g-ct" style="margin-bottom:0"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — OSs Sem Diário</div>'+
           '<div class="g-prio-row" style="margin-bottom:0">'+_prioBtnsUpd(c.id, updPrioFilterList[c.id], 'toggleUpdListPrio')+'</div>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;margin-top:8px">Total sem diário: <b style="color:#e74c3c">'+updL.semDiario+'</b>'+
+        '<div style="font-size:10px;color:var(--muted);margin-bottom:8px;margin-top:8px">Total sem diário: <b style="color:#e74c3c">'+updL.semDiario+'</b> · recentes no topo, mais antigas no final'+
           (updPrioFilterList[c.id].length ? ' · Filtro: <b style="color:var(--primary)">'+updPrioFilterList[c.id].join(', ')+'</b>' : '')+
         '</div>'+
         listHtml;
       rowL.appendChild(divL);
     });
+  }
+
+  /* Drilldown dos indicadores de Cobertura de Diário (respeita o filtro de prioridade do card) */
+  var UPD_KINDS = {
+    com: { lbl:'Com diário',       ord:'asc'  },   /* quem está há mais tempo sem update primeiro */
+    sem: { lbl:'Sem diário',       ord:'new'  },   /* caíram agora no topo; mais antigas no final */
+    r24: { lbl:'>24h sem update',  ord:'asc'  },
+    r48: { lbl:'>48h sem update (crítico)', ord:'asc' }
+  };
+  function openUpdListDrill(contractId, kind) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    var meta = UPD_KINDS[kind];
+    if (!c || !meta || !ST[c.id].cls) return;
+    var st = computeUpdStats(ST[c.id].cls, updPrioFilterKpi[c.id]);
+    var rows = st.lists[kind].slice();
+    if (meta.ord === 'new') rows.sort(function(a,b){ return (a._h==null?1e9:a._h) - (b._h==null?1e9:b._h); });
+    else rows.sort(function(a,b){ return b._h - a._h; });
+    var now = Date.now();
+    var showUpd = kind !== 'sem';
+    var thead = '<tr>'+['Região','TSK','Site','Cidade','P', showUpd?'Último update':'Criação NTT', showUpd?'Sem update há':'Aberta há','Vencimento']
+      .map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr>';
+    var body = rows.slice(0,1000).map(function(t){
+      var p = up(t.prioridade);
+      var corH = t._h==null ? 'var(--muted)' : t._h>72?'#e74c3c':t._h>48?'#ff8c00':t._h>24?'#f39c12':'#2ecc71';
+      var quando = showUpd ? fmtDt(t._lastDt) : fmtDt(t.dataCriacaoAS||t.dataCriacao);
+      var dur = t._h==null ? '—' : fmtElapsed(t._h*3600000);
+      return '<tr style="cursor:pointer" onclick="openUpdItemDrill(\''+c.id+'\',\''+escHtml(t.osNumero||'').replace(/\'/g,"\\\'")+'\')" title="Ver detalhes">'+
+        '<td>'+escHtml(t.regiao||'—')+'</td>'+
+        '<td style="font-weight:700;white-space:nowrap">'+escHtml(t.osNumero||'—')+'</td>'+
+        '<td>'+escHtml(t.siteId||t.enderecoId||'—')+'</td>'+
+        '<td>'+escHtml(t.cidade||'—')+'</td>'+
+        '<td>'+(p?'<span style="font-weight:800;color:'+(PRIO_COR[p]||'var(--fg)')+'">'+escHtml(p)+'</span>':'—')+'</td>'+
+        '<td style="white-space:nowrap;color:var(--muted)">'+quando+'</td>'+
+        '<td style="white-space:nowrap;font-weight:700;color:'+corH+'">'+dur+'</td>'+
+        '<td>'+vencBadge(t.vencimentoCalc)+'</td>'+
+      '</tr>';
+    }).join('');
+    var filtro = updPrioFilterKpi[c.id].length ? ' · '+updPrioFilterKpi[c.id].join(', ') : '';
+    openGModal(c.name+' — '+meta.lbl+filtro+' ('+rows.length+')',
+      rows.length ? '<div class="g-dtbl-wrap"><table class="g-dtbl"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table></div>'
+                  : '<div class="g-empty">Sem registros</div>');
   }
 
   function toggleUpdKpiPrio(contractId, prio) {
@@ -1790,7 +1889,8 @@
     if (!d) return '<span style="color:var(--muted)">—</span>';
     var diff = Math.round((d.getTime() - Date.now()) / 60000);
     var abs = Math.abs(diff), h = Math.floor(abs / 60), m = abs % 60;
-    var txt = h > 0 && m > 0 ? h + 'h' + ('0' + m).slice(-2) : (h > 0 ? h + 'h' : m + 'min');
+    var txt = h >= 48 ? Math.floor(h / 24) + 'd ' + (h % 24) + 'h'
+            : (h > 0 && m > 0 ? h + 'h' + ('0' + m).slice(-2) : (h > 0 ? h + 'h' : m + 'min'));
     return diff < 0
       ? badgeS('⚠ VENCIDO A ' + txt, '#e74c3c', 'rgba(231,76,60,.16)')
       : badgeS('⏱ VENCE EM ' + txt, '#2ecc71', 'rgba(46,204,113,.16)');
@@ -1848,7 +1948,50 @@
     );
   }
 
-  /* Campo × CCI — pela fila (OPERADOR_* = CCI), igual ao público ────────── */
+  /* Produção — Campo × CCI/CCO ───────────────────────────────
+     Produção = corretivas ENCERRADAS (1 por TSK). Campo/CCI pela FILA, com a regra de cada contrato
+     (c.isCci = classificarCciCampo do domain.js do TRJ/TMG/TNE). Dentro/fora/preditiva iguais ao gráfico
+     "Produtividade" do dashboard público. */
+  function histCciCampo(c, days) {
+    var st = ST[c.id], hist = st.prodHistory;
+    if (!hist) return null;
+    var limite = Date.now() - (days||30) * 864e5;
+    var hoje = localDay(new Date());
+    var cci = 0, campo = 0;
+    Object.keys(hist).forEach(function(d) {
+      var dd = safeDate(d);
+      if (!dd || d === hoje || dd.getTime() + 864e5 < limite) return;
+      cci += (hist[d] && hist[d].cci) || 0;
+      campo += (hist[d] && hist[d].campo) || 0;
+    });
+    /* hoje sempre ao vivo, pela regra do contrato */
+    ((st.cls && st.cls.dedup) || []).forEach(function(t) {
+      if (!isConcluida(t)) return;
+      var dt = safeDate(t.fimCalc);
+      if (!dt || localDay(dt) !== hoje) return;
+      if (c.isCci(t)) cci++; else campo++;
+    });
+    return { cci: cci, campo: campo };
+  }
+
+  function openProdCatDrill(contractId, cat, lado) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if (!c || !ST[c.id].cls) return;
+    var rows = ST[c.id].cls.concluidas.filter(function(t) {
+      if (cat !== 'Geral' && (c.isCci(t) ? 'CCI' : 'Campo') !== cat) return false;
+      if (!lado) return true;
+      if (lado === 'preditiva') return isPred(t);
+      if (isPred(t)) return false;
+      var r = encDentro(t);
+      if (lado === 'dentro') return r === true;
+      if (lado === 'fora') return r === false;
+      return r === null;
+    }).map(function(t) { return Object.assign({}, t, { _contrato: c.name, _color: c.color }); });
+    rows.sort(function(a, b) { var fa = safeDate(a.fimCalc), fb = safeDate(b.fimCalc); return (fb?fb.getTime():0) - (fa?fa.getTime():0); });
+    var nomeLado = { dentro:'dentro do SLA', fora:'fora do SLA', preditiva:'preditiva', semPrazo:'sem prazo' }[lado] || 'todas';
+    openDrill(c.name + ' — Produção ' + (cat==='CCI'?'CCI/CCO':cat) + ' · ' + nomeLado, rows, { mode:'resultado', keepOrder:true });
+  }
+
   function renderCampoCci() {
     var row = document.getElementById('campoCciRow');
     if (!row) return;
@@ -1857,34 +2000,55 @@
       var K = ST[c.id].kpis || {};
       var div = document.createElement('div');
       div.className = 'g-card';
+      var dot = '<span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>';
       if (ST[c.id].error) {
-        div.innerHTML = '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+' — Campo × CCI</div><div class="g-empty" style="color:#e74c3c">'+escHtml(ST[c.id].error)+'</div>';
+        div.innerHTML = '<div class="g-ct">'+dot+c.name+' — Produção Campo × CCI/CCO</div><div class="g-empty" style="color:#e74c3c">'+escHtml(ST[c.id].error)+'</div>';
         row.appendChild(div);
         return;
       }
-      var campoProd = nn(K.campoProd), cciProd = nn(K.cciProd);
-      var campoBl   = nn(K.campoBl),   cciBl   = nn(K.cciBl);
-      var campoTot  = campoProd + campoBl;
-      var cciTot    = cciProd + cciBl;
-      var grand     = campoTot + cciTot;
-      function pp(n){ return grand > 0 ? (n / grand * 100) : 0; }
-      var campoPct = pp(campoTot), cciPct = pp(cciTot);
+      var pc = K.prodCat || { Geral:{}, CCI:{}, Campo:{} };
+      function tot(o) { return nn(o.dentro) + nn(o.fora) + nn(o.preditiva) + nn(o.semPrazo); }
+      var cciTot = tot(pc.CCI), campoTot = tot(pc.Campo), grand = cciTot + campoTot;
+      function pp(n) { return grand > 0 ? n / grand * 100 : 0; }
+      var cciPct = pp(cciTot), campoPct = pp(campoTot);
       var barHtml = grand > 0
         ? '<div class="g-camp-bar-row">' +
             (campoTot > 0 ? '<div class="g-camp-seg" style="width:'+campoPct.toFixed(1)+'%;background:'+c.color+';color:#111">Campo '+campoPct.toFixed(0)+'%</div>' : '') +
             (cciTot   > 0 ? '<div class="g-camp-seg" style="width:'+cciPct.toFixed(1)+'%;background:#3498db;color:#fff">CCI '+cciPct.toFixed(0)+'%</div>' : '') +
           '</div>'
-        : '<div class="g-empty">Sem tarefas corretivas</div>';
+        : '<div class="g-empty">Sem encerramentos no snapshot</div>';
+
+      function linhaCat(cat, rotulo, cor) {
+        var o = pc[cat] || {};
+        var base = nn(o.dentro) + nn(o.fora);
+        var sla = base > 0 ? Math.round(nn(o.dentro) / base * 1000) / 10 : null;
+        function chip(lado, val, corV, txt) {
+          return val > 0
+            ? '<span style="cursor:pointer;color:'+corV+'" title="Ver as OSs" onclick="openProdCatDrill(\''+c.id+'\',\''+cat+'\',\''+lado+'\')">'+txt+' <b>'+val+'</b></span>'
+            : '<span style="color:var(--muted)">'+txt+' <b>0</b></span>';
+        }
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border);font-size:11px">'+
+          '<span style="font-weight:800;color:'+cor+';min-width:64px">'+rotulo+'</span>'+
+          chip('dentro', nn(o.dentro), '#2ecc71', 'Dentro')+
+          chip('fora', nn(o.fora), '#e74c3c', 'Fora')+
+          chip('preditiva', nn(o.preditiva), '#f39c12', 'Preditiva')+
+          '<span style="font-weight:800;color:'+(sla==null?'var(--muted)':pctColor(sla))+'">'+(sla==null?'—':sla.toFixed(1)+'% SLA')+'</span>'+
+        '</div>';
+      }
+      var h30 = histCciCampo(c, 30);
       div.innerHTML =
-        '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Campo × CCI</div>'+
+        '<div class="g-ct">'+dot+c.name+' — Produção Campo × CCI/CCO</div>'+
         barHtml+
-        '<div class="g-prod-kpis" style="grid-template-columns:repeat(2,1fr);margin-top:10px">'+
-          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(campoTot)+'</div><div class="g-prod-kpi-lbl">Campo ('+campoPct.toFixed(1)+'%)</div></div>'+
-          '<div class="g-prod-kpi"><div class="g-prod-kpi-val" style="color:#3498db">'+fmtN(cciTot)+'</div><div class="g-prod-kpi-lbl">CCI/CCO ('+cciPct.toFixed(1)+'%)</div></div>'+
+        '<div class="g-prod-kpis" style="grid-template-columns:repeat(3,1fr);margin-top:10px">'+
+          '<div class="g-prod-kpi"'+(grand>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'Geral\',null)"':'')+'><div class="g-prod-kpi-val" style="color:var(--fg)">'+fmtN(grand)+'</div><div class="g-prod-kpi-lbl">Encerradas'+(grand>0?' ↗':'')+'</div></div>'+
+          '<div class="g-prod-kpi"'+(cciTot>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'CCI\',null)"':'')+'><div class="g-prod-kpi-val" style="color:#3498db">'+fmtN(cciTot)+'</div><div class="g-prod-kpi-lbl">CCI/CCO ('+cciPct.toFixed(1)+'%)'+(cciTot>0?' ↗':'')+'</div></div>'+
+          '<div class="g-prod-kpi"'+(campoTot>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'Campo\',null)"':'')+'><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(campoTot)+'</div><div class="g-prod-kpi-lbl">Campo ('+campoPct.toFixed(1)+'%)'+(campoTot>0?' ↗':'')+'</div></div>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">'+
-          '<span>Concluídas: Campo <b style="color:'+c.color+'">'+campoProd+'</b> · CCI <b style="color:#3498db">'+cciProd+'</b></span>'+
-          '<span>Backlog: Campo <b style="color:'+c.color+'">'+campoBl+'</b> · CCI <b style="color:#3498db">'+cciBl+'</b></span>'+
+        linhaCat('CCI', 'CCI/CCO', '#3498db')+
+        linhaCat('Campo', 'Campo', c.color)+
+        '<div style="font-size:10px;color:var(--muted);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:8px">'+
+          (h30 ? '<span>Últimos 30 dias (histórico + hoje): CCI <b style="color:#3498db">'+fmtN(h30.cci)+'</b> · Campo <b style="color:'+c.color+'">'+fmtN(h30.campo)+'</b></span>' : '')+
+          '<span>Backlog atual: CCI <b style="color:#3498db">'+nn(K.cciBl)+'</b> · Campo <b style="color:'+c.color+'">'+nn(K.campoBl)+'</b></span>'+
         '</div>';
       row.appendChild(div);
     });
@@ -2017,6 +2181,9 @@
   window.openUpdItemDrill   = openUpdItemDrill;
   window.toggleUpdKpiPrio   = toggleUpdKpiPrio;
   window.toggleUpdListPrio  = toggleUpdListPrio;
+  window.setProdPrio        = setProdPrio;
+  window.openUpdListDrill   = openUpdListDrill;
+  window.openProdCatDrill   = openProdCatDrill;
   renderStrips();
   renderFilterButtons();
   renderHeroKpis();
