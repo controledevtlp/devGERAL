@@ -113,7 +113,24 @@
 
     /* Tab content */
     .g-tab-pane { display: none; }
-    .g-tab-pane.active { display: block; }
+    @keyframes g-tab-in { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:none; } }
+    .g-tab-pane.active { display: block; animation: g-tab-in .22s cubic-bezier(.22,.61,.36,1) both; }
+
+    /* Hero tile entrance */
+    @keyframes g-hero-in { from { opacity:0; transform:translateY(12px) scale(.97); } to { opacity:1; transform:none; } }
+
+    /* Number count-up flash */
+    @keyframes g-num-in { from { opacity:0; } to { opacity:1; } }
+
+    /* Button press feel */
+    .g-tab-btn { transition: all .15s, transform .08s; }
+    .g-tab-btn:active { transform: scale(.93); }
+    .g-filter-btn { transition: all .15s, transform .08s !important; }
+    .g-filter-btn:active { transform: scale(.93) !important; }
+    .g-btn { transition: all .15s, transform .08s; }
+    .g-btn:active { transform: scale(.93); }
+    .g-modal-close { transition: all .15s, transform .08s; }
+    .g-modal-close:active { transform: scale(.88) !important; }
 
     /* Main wrapper */
     .g-main { padding: 24px 36px; display: flex; flex-direction: column; gap: 28px; max-width: 1440px; margin: 0 auto; width: 100%; }
@@ -534,6 +551,29 @@
   /* ── UTILS ────────────────────────────────────────────────── */
   function nn(n){ return n==null?0:n; }
   function fmtN(n){ return nn(n).toLocaleString('pt-BR'); }
+
+  function animateCountUps(container, dur) {
+    dur = dur || 650;
+    var els = (container||document).querySelectorAll('.g-hero-val[data-target]');
+    if (!els.length) return;
+    var start = null;
+    var targets = Array.prototype.slice.call(els).map(function(el){
+      return { el:el, to:parseFloat(el.dataset.target), dec:parseInt(el.dataset.dec||'0',10), suf:el.dataset.suf||'' };
+    });
+    function easeOut(t){ return 1-Math.pow(1-t,3); }
+    function step(ts){
+      if(!start) start=ts;
+      var p = Math.min((ts-start)/dur, 1);
+      var e = easeOut(p);
+      targets.forEach(function(t){
+        var v = t.to * e;
+        var s = t.dec > 0 ? v.toFixed(t.dec) : Math.round(v).toLocaleString('pt-BR');
+        t.el.textContent = s + t.suf;
+      });
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   function up(s){ return (s==null?'':s).toString().toUpperCase().trim(); }
   function normTxt(s){
     return (s==null?'':s).toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
@@ -1101,11 +1141,13 @@
 
     var row = document.getElementById('heroRow');
     row.innerHTML='';
-    defs.forEach(function(d){
+    defs.forEach(function(d, idx){
       var div = document.createElement('div');
       div.className = 'g-hero';
       div.id = d.id;
       div.style.borderColor = 'rgba(255,255,255,.06)';
+      div.style.animation = 'g-hero-in .28s cubic-bezier(.22,.61,.36,1) both';
+      div.style.animationDelay = (idx * 55) + 'ms';
       if(d.drill && !loading){
         div.style.cursor='pointer';
         div.title='Clique para ver detalhes';
@@ -1114,9 +1156,27 @@
         var drillMode = d.mode||'venc';
         div.addEventListener('click', function(){ openDrill(drillLbl, drillCopy, {mode:drillMode}); });
       }
+
+      /* Prepare count-up data attributes for numeric values */
+      var valHtml;
+      if(!loading && d.val && d.val !== '—') {
+        var mPct = d.val.match(/^([\d,.]+)(%?)$/);
+        if(mPct) {
+          var numStr = mPct[1].replace(/\./g,'').replace(',','.');
+          var raw = parseFloat(numStr);
+          var dec  = mPct[1].indexOf(',') > -1 ? 1 : 0;
+          valHtml = '<div class="g-hero-val" style="color:'+d.cor+';animation:g-num-in .35s ease '+(idx*55+120)+'ms both" '+
+            'data-target="'+raw+'" data-dec="'+dec+'" data-suf="'+mPct[2]+'">0'+mPct[2]+'</div>';
+        } else {
+          valHtml = '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>';
+        }
+      } else {
+        valHtml = '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>';
+      }
+
       div.innerHTML =
         '<div class="g-hero-lbl">'+d.lbl+(d.drill&&!loading?' <span style="font-size:9px;opacity:.5">↗</span>':'')+'</div>'+
-        '<div class="g-hero-val" style="color:'+d.cor+'">'+d.val+'</div>'+
+        valHtml+
         '<div class="g-hero-sub">'+d.sub+'</div>'+
         '<div class="g-hero-break">'+d.br+'</div>';
       var accent = document.createElement('div');
@@ -1124,6 +1184,7 @@
       div.appendChild(accent);
       row.appendChild(div);
     });
+    if(!loading) animateCountUps(row, 700);
   }
 
   /* ── DONUTS — SLA Geral Backlog Atual ─────────────────────── */
