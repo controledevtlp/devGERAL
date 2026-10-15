@@ -10,6 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <!-- Tema claro/escuro (aplica o tema salvo antes da primeira pintura) -->
+  <script src="theme.js"></script>
 
   <style>
     :root {
@@ -26,6 +28,33 @@
       --border:  rgba(255,140,0,.15);
       --border2: rgba(255,140,0,.32);
     }
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg:      #f3f4f7;
+      --card:    #ffffff;
+      --card2:   #eef0f5;
+      --primary: #b85a00;
+      --pri2:    #e07a00;
+      --red:     #c62839;
+      --green:   #168a47;
+      --blue:    #1f6fb5;
+      --fg:      #181820;
+      --muted:   #5a5d6b;
+      --border:  rgba(20,24,40,.13);
+      --border2: rgba(194,94,0,.42);
+    }
+    html[data-theme="light"] body::before {
+      background:
+        radial-gradient(ellipse at 10% 0%,  rgba(255,140,0,.07) 0%, transparent 55%),
+        radial-gradient(ellipse at 90% 100%, rgba(52,152,219,.05) 0%, transparent 55%);
+    }
+    html[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(20,24,40,.22); }
+    html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(20,24,40,.40); }
+    html[data-theme="light"] .g-card, html[data-theme="light"] .g-hero, html[data-theme="light"] .g-strip { box-shadow: 0 1px 2px rgba(20,24,40,.06); }
+    html[data-theme="light"] .g-card:hover, html[data-theme="light"] .g-strip:hover { box-shadow: 0 8px 24px rgba(20,24,40,.12); }
+    html[data-theme="light"] .g-modal-bg { background: rgba(20,24,40,.45); }
+    html[data-theme="light"] .g-modal-box { box-shadow: 0 24px 80px rgba(20,24,40,.25); }
+    html[data-theme="light"] .g-badge { color: #fff; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { background: var(--bg); color: var(--fg); }
     body {
@@ -288,6 +317,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
     <span class="g-ts" id="tsEl">—</span>
+    <button class="g-btn" id="themeBtn" type="button" onclick="TRJ.theme.toggle()" title="Alternar tema claro/escuro">🌙</button>
     <button class="g-btn" onclick="loadAll()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
@@ -722,8 +752,16 @@
   /* Data do último update humano (null = sem diário) */
   function lastUpdDt(bg){ var r=classificarUpd(bg); return r.estado==='sem'?null:r.dt; }
 
-  Chart.defaults.color = '#8a8a93';
-  Chart.defaults.borderColor = 'rgba(255,140,0,.07)';
+  /* Cores de gráfico (canvas) por tema — o adaptador do theme.js só cobre elementos do DOM */
+  function isLight(){ return !!(window.TRJ && TRJ.theme && TRJ.theme.isLight()); }
+  function chFg(){ return isLight() ? '#181820' : '#f0f0f0'; }
+  function chMuted(){ return isLight() ? '#5a5d6b' : '#8a8a93'; }
+  function chGrid(){ return isLight() ? 'rgba(20,24,40,.09)' : 'rgba(255,140,0,.05)'; }
+  function applyChartTheme(){
+    Chart.defaults.color = chMuted();
+    Chart.defaults.borderColor = isLight() ? 'rgba(20,24,40,.08)' : 'rgba(255,140,0,.07)';
+  }
+  applyChartTheme();
   Chart.defaults.font.family = "ui-sans-serif,system-ui,'Segoe UI',sans-serif";
   Chart.defaults.font.size = 12;
 
@@ -1303,7 +1341,7 @@
           openDrill(ds._contract.name+' — SLA '+p+' '+tipo.charAt(0).toUpperCase()+tipo.slice(1)+' SLA', tasks);
         },
         scales:{
-          x:{ grid:{display:false}, ticks:{font:{size:12},color:'#f0f0f0'} },
+          x:{ grid:{display:false}, ticks:{font:{size:12},color:chFg()} },
           y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
         },
         plugins:{
@@ -1397,7 +1435,7 @@
           openDrill(entry.contract.name+' — Aging '+bkt.label, tasks, {keepOrder:true});
         },
         scales:{
-          x:{ grid:{display:false}, ticks:{font:{size:11},color:'#f0f0f0',maxRotation:45,minRotation:45} },
+          x:{ grid:{display:false}, ticks:{font:{size:11},color:chFg(),maxRotation:45,minRotation:45} },
           y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
         },
         plugins:{
@@ -1405,7 +1443,7 @@
           tooltip:{...TT, callbacks:{ footer:function(){ return 'Clique para ver lista'; } }},
           datalabels:{
             display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
-            anchor:'end', align:'end', color:'#f0f0f0', font:{size:10,weight:'bold'},
+            anchor:'end', align:'end', color:chFg(), font:{size:10,weight:'bold'},
             formatter:function(v){ return v>0?v:''; }
           }
         }
@@ -1629,8 +1667,8 @@
           options: {
             responsive: true, maintainAspectRatio: false,
             scales: {
-              x: { stacked: true, ticks: { color: '#8a8a93', font: { size: 9 }, maxRotation: 45, minRotation: 45 }, grid: { color: 'rgba(255,140,0,.05)' } },
-              y: { stacked: true, ticks: { color: '#8a8a93', font: { size: 10 } }, grid: { color: 'rgba(255,140,0,.05)' }, beginAtZero: true },
+              x: { stacked: true, ticks: { color: chMuted(), font: { size: 9 }, maxRotation: 45, minRotation: 45 }, grid: { color: chGrid() } },
+              y: { stacked: true, ticks: { color: chMuted(), font: { size: 10 } }, grid: { color: chGrid() }, beginAtZero: true },
               yP: { position: 'right', min: 0, max: 100,
                     ticks: { color: '#f1c40f', font: { size: 9 }, callback: function(v) { return v+'%'; } },
                     grid: { drawOnChartArea: false } }
@@ -1692,14 +1730,14 @@
           options: {
             responsive: true, maintainAspectRatio: false,
             scales: {
-              x: { ticks: { color: '#8a8a93', font: { size: 9 } }, grid: { color: 'rgba(255,140,0,.05)' } },
-              y: { ticks: { color: '#8a8a93', font: { size: 10 } }, grid: { color: 'rgba(255,140,0,.05)' }, beginAtZero: true }
+              x: { ticks: { color: chMuted(), font: { size: 9 } }, grid: { color: chGrid() } },
+              y: { ticks: { color: chMuted(), font: { size: 10 } }, grid: { color: chGrid() }, beginAtZero: true }
             },
             plugins: {
               legend: { display: false }, tooltip: TT,
               datalabels: {
                 display: function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0; },
-                anchor: 'end', align: 'end', color: '#f0f0f0', font: { size: 9, weight: 'bold' },
+                anchor: 'end', align: 'end', color: chFg(), font: { size: 9, weight: 'bold' },
                 formatter: function(v) { return v > 0 ? v : ''; }
               }
             }
@@ -2298,6 +2336,16 @@
   }
 
   /* ── BOOT ─────────────────────────────────────────────────── */
+  function updateThemeBtn(){
+    var b = document.getElementById('themeBtn'); if(!b) return;
+    b.textContent = isLight() ? '🌙' : '☀️';
+    b.title = isLight() ? 'Mudar para o tema escuro' : 'Mudar para o tema claro';
+  }
+  updateThemeBtn();
+  if (window.TRJ && TRJ.theme) TRJ.theme.onChange(function(){
+    applyChartTheme(); updateThemeBtn();
+    renderedTabs = {}; render();     /* redesenha gráficos/cartões com as cores do tema */
+  });
   window.switchTab          = switchTab;
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
