@@ -421,7 +421,10 @@
 <!-- MODAL GESTÃO -->
 <div id="gModal" class="g-modal-bg" onclick="if(event.target===this)closeGModal()">
   <div class="g-modal-box">
-    <button class="g-modal-close" onclick="closeGModal()">✕</button>
+    <div style="position:absolute;top:14px;right:14px;display:flex;gap:6px;align-items:center">
+      <button id="gModalCopyBtn" class="g-modal-close" style="position:static" title="Copiar conteúdo" onclick="copyGModal()">📋</button>
+      <button class="g-modal-close" style="position:static" onclick="closeGModal()">✕</button>
+    </div>
     <div class="g-modal-title" id="gModalTitle"></div>
     <div id="gModalBody"></div>
   </div>
@@ -828,10 +831,10 @@
     var sitesForaAtivos=0, incByReg={}, vistos={};
     (incidents||[]).forEach(function(i){
       if(up(i.statusTrat||'ATIVO')==='RESOLVIDO') return;
-      var r = regionFn(i);
+      sitesForaAtivos++; /* contagem bruta — igual ao totalSitesFora do dashboard de cada contrato */
+      var r = regionFn(i)||'Outros';
       var e = up(i.enderecoId);
       if(e){ var k=r+'|'+e; if(vistos[k]) return; vistos[k]=true; }
-      sitesForaAtivos++;
       if(!incByReg[r]) incByReg[r]={total:0,comTsk:0,semTsk:0};
       incByReg[r].total++;
       if(e && endsComTsk[e]) incByReg[r].comTsk++; else incByReg[r].semTsk++;
@@ -1915,13 +1918,46 @@
   }
 
   /* ── MODAL ──────────────────────────────────────────────────── */
-  function openGModal(title, bodyHtml) {
+  var _gModalCopyFn = null;
+  function openGModal(title, bodyHtml, opts) {
     document.getElementById('gModalTitle').textContent = title;
     document.getElementById('gModalBody').innerHTML = bodyHtml;
+    _gModalCopyFn = (opts && opts.copyFn) || null;
+    document.getElementById('gModalCopyBtn').textContent = '📋';
     document.getElementById('gModal').classList.add('open');
   }
   function closeGModal() {
     document.getElementById('gModal').classList.remove('open');
+    _gModalCopyFn = null;
+  }
+  function fallbackCopy(txt) {
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+  function copyGModal() {
+    var txt;
+    if (_gModalCopyFn) { txt = _gModalCopyFn(); }
+    else {
+      var tbl = document.querySelector('#gModalBody table');
+      if (tbl) {
+        var rows = [];
+        tbl.querySelectorAll('tr').forEach(function(tr) {
+          var cells = []; tr.querySelectorAll('th,td').forEach(function(td) { cells.push(td.innerText.replace(/\t|\n/g,' ').trim()); });
+          rows.push(cells.join('\t'));
+        });
+        txt = document.getElementById('gModalTitle').textContent + '\n\n' + rows.join('\n');
+      } else {
+        txt = document.getElementById('gModalTitle').textContent + '\n\n' + document.getElementById('gModalBody').innerText;
+      }
+    }
+    var btn = document.getElementById('gModalCopyBtn');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(txt).then(function(){ btn.textContent='✓'; setTimeout(function(){ btn.textContent='📋'; },1500); })
+                                        .catch(function(){ fallbackCopy(txt); btn.textContent='✓'; setTimeout(function(){ btn.textContent='📋'; },1500); });
+    } else { fallbackCopy(txt); btn.textContent='✓'; setTimeout(function(){ btn.textContent='📋'; },1500); }
   }
 
   /* ── DRILL MODAL UNIVERSAL (mesmas colunas do U.taskTable do dashboard público) ──
@@ -2124,10 +2160,11 @@
       var comTskTot=0, semTskTot=0;
       regs.forEach(function(r){ comTskTot+=(ibr[r].comTsk||0); semTskTot+=(ibr[r].semTsk||0); });
       var total = nn(K.sitesForaAtivos);
-      /* drill por região: 1 linha por END_ID (mesma contagem do número exibido) */
-      _sfDrillData[c.id] = {};
+      /* drill por região + drill geral */
+      _sfDrillData[c.id] = { '__all__': incsAtivos };
       regs.forEach(function(r){
-        _sfDrillData[c.id][r] = agruparPorEndId(incsAtivos.filter(function(i){ return c.region(i)===r; }));
+        var rKey = c.region; /* usar mesma fn para filtrar */
+        _sfDrillData[c.id][r] = agruparPorEndId(incsAtivos.filter(function(i){ return (c.region(i)||'Outros')===r; }));
       });
       var listHtml = '';
       if (!regs.length) {
@@ -2137,8 +2174,9 @@
           var v = ibr[r]; var pct = maxR>0 ? v.total/maxR*100 : 0;
           var comPct = v.total>0 ? Math.round(v.comTsk/v.total*100) : 0;
           var safeR = r.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          var labelR = (r==='SEM REGIÃO'||r==='OTHERS'||!r.trim()) ? 'Outros / Sem Mapeamento' : r;
           return '<div class="g-sf-row" onclick="openSitesForaDrill(\''+c.id+'\',\''+safeR+'\')">'+
-            '<span class="g-sf-reg" style="color:'+c.color+'">'+escHtml(r)+'</span>'+
+            '<span class="g-sf-reg" style="color:'+c.color+'">'+escHtml(labelR)+'</span>'+
             '<div class="g-sf-bar"><div class="g-sf-bar-fill" style="width:'+pct.toFixed(1)+'%;background:'+c.color+'"></div></div>'+
             '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">'+
               '<span class="g-sf-cnt" style="color:#e74c3c">'+v.total+'</span>'+
@@ -2147,18 +2185,22 @@
           '</div>';
         }).join('');
       }
+      var safeId = c.id.replace(/'/g,"\\'");
       var div = document.createElement('div');
       div.className = 'g-card';
       div.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'+
           '<div class="g-ct" style="margin-bottom:0"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Sites Fora</div>'+
-          '<div style="font-family:\'Sora\',sans-serif;font-size:30px;font-weight:800;color:#e74c3c;line-height:1">'+total+'</div>'+
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">'+
+            '<div style="font-family:\'Sora\',sans-serif;font-size:30px;font-weight:800;color:#e74c3c;line-height:1;cursor:pointer" title="Ver todos os incidentes" onclick="openAllSitesFora(\''+safeId+'\')">'+total+'</div>'+
+            '<div style="font-size:10px;color:#e74c3c;cursor:pointer;opacity:.7" onclick="openAllSitesFora(\''+safeId+'\')">↗ ver todos</div>'+
+          '</div>'+
         '</div>'+
         '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">'+
           '<span style="color:#2ecc71">● '+comTskTot+' com TSK</span>'+
           '<span style="color:#e74c3c">● '+semTskTot+' sem TSK</span>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Clique em uma região para ver a lista</div>'+
+        '<div style="font-size:10px;color:var(--muted);margin-bottom:8px">Clique em uma região para ver a lista · clique no total para ver todos</div>'+
         listHtml;
       row.appendChild(div);
     });
@@ -2175,6 +2217,45 @@
     var corr = cand.filter(isCorretiva);
     var arr = (corr.length ? corr : cand).slice().sort(function(a,b){ return (Number(b.sequenciaId)||0)-(Number(a.sequenciaId)||0); });
     return arr[0];
+  }
+
+  function openAllSitesFora(contractId) {
+    var c = CONTRACTS.find(function(x){ return x.id===contractId; });
+    if (!c) return;
+    var cls = ST[contractId].cls;
+    var incsAtivos = ((_sfDrillData[contractId]||{})['__all__']||[]).slice();
+    incsAtivos.sort(function(a,b){
+      var ta = safeDate(a.horarioDt), tb = safeDate(b.horarioDt);
+      return (ta?ta.getTime():Infinity)-(tb?tb.getTime():Infinity);
+    });
+    var now = Date.now();
+    var body = incsAtivos.map(function(i){
+      var hDt = safeDate(i.horarioDt);
+      var dur = hDt ? fmtElapsed(now-hDt.getTime()) : (i.downtime||'—');
+      var tsk = tskAbertaDe(cls, i.enderecoId);
+      var tskCell = tsk
+        ? badgeS(tsk.osNumero||'—', isBacklogSt(tsk)&&stKey(tsk)==='INICIADO'?'#2ecc71':'#f1c40f',
+                 stKey(tsk)==='INICIADO'?'rgba(46,204,113,.18)':'rgba(241,196,15,.18)')
+        : badgeS('SEM TSK', '#ff6b6b', 'rgba(231,76,60,.16)');
+      var reg = i.regiao||(i.anf?'ANF'+i.anf:'')||'—';
+      var det = (i.detalhe||'').toString().replace(/\s+/g,' ').trim();
+      return '<tr>'+
+        '<td style="white-space:nowrap">'+escHtml(i.horario||fmtDt(i.horarioDt))+'</td>'+
+        '<td style="white-space:nowrap;color:#e74c3c;font-weight:700">'+escHtml(dur)+'</td>'+
+        '<td style="font-weight:700">'+escHtml(i.site||'—')+'</td>'+
+        '<td>'+escHtml(i.enderecoId||'—')+'</td>'+
+        '<td style="font-size:10px;color:var(--muted)">'+escHtml(reg)+'</td>'+
+        '<td>'+escHtml(i.cidadeUf||i.cidade||'—')+'</td>'+
+        '<td>'+tskCell+'</td>'+
+        '<td>'+escHtml(i.causa||'—')+'</td>'+
+        '<td class="det" title="'+escHtml(det)+'">'+(det?escHtml(det.slice(0,100))+(det.length>100?'…':''):'<i>—</i>')+'</td>'+
+      '</tr>';
+    }).join('');
+    var thead = '<tr>'+['Horário','Duração','Site','END_ID','Região','Cidade/UF','TSK','Causa','Detalhe'].map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr>';
+    openGModal('Sites Fora — '+c.name+' — Todos ('+incsAtivos.length+')',
+      incsAtivos.length ? '<div class="g-dtbl-wrap"><table class="g-dtbl"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table></div>'
+                        : '<div class="g-empty">Sem incidentes ativos</div>'
+    );
   }
 
   function openSitesForaDrill(contractId, regiao) {
@@ -2225,6 +2306,7 @@
   window.closeGModal        = closeGModal;
   window.openDrill          = openDrill;
   window.openSitesForaDrill = openSitesForaDrill;
+  window.openAllSitesFora   = openAllSitesFora;
   window.openUpdItemDrill   = openUpdItemDrill;
   window.toggleUpdKpiPrio   = toggleUpdKpiPrio;
   window.toggleUpdListPrio  = toggleUpdListPrio;
