@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Tema claro/escuro (aplica o tema salvo antes da primeira pintura) -->
   <script src="theme.js"></script>
 
@@ -335,6 +336,11 @@
   <div style="display:flex;align-items:center;gap:12px;">
     <span class="g-ts" id="tsEl">—</span>
     <button class="g-btn" id="themeBtn" type="button" onclick="TRJ.theme.toggle()" title="Alternar tema claro/escuro">🌙</button>
+    <button class="g-btn" onclick="exportarXlsx()" title="Exportar visão atual para Excel">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>XLSX
+    </button>
     <button class="g-btn" onclick="loadAll()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
@@ -416,7 +422,8 @@
     <div class="g-sec"><span class="g-sec-dot"></span>Aging do Backlog — Tempo em Aberto</div>
     <div class="g-card">
       <div class="g-ct"><span class="g-ct-dot" style="background:var(--primary)"></span>Distribuição do backlog por faixa de idade</div>
-      <div class="g-cbox" style="height:220px;"><canvas id="chartAging"></canvas></div>
+      <div id="agingFilterBar" class="g-filter-bar"></div>
+      <div class="g-cbox" style="height:250px;"><canvas id="chartAging"></canvas></div>
     </div>
   </div>
 
@@ -1587,16 +1594,34 @@
 
   /* ── AGING ────────────────────────────────────────────────── */
   var _agingDrill = []; /* [{contract, bucketIdx, tasks}] — por dataset index */
+  var agingPrio = null;
+  function setAgingPrio(p) { agingPrio = p||null; renderAging(); }
+
   function renderAging(){
     destroyChart('aging');
     _agingDrill = [];
     var agingNow = Date.now();
+
+    /* Filter chips */
+    var fb = document.getElementById('agingFilterBar');
+    if (fb) {
+      fb.innerHTML = '<span class="g-filter-lbl">Prioridade:</span>' +
+        [null,'P1','P2','P3','P4','P5'].map(function(p) {
+          var active = agingPrio === p;
+          var baseStyle = active
+            ? 'background:#ff8c00;border-color:#ff8c00;color:#111;font-weight:800;box-shadow:0 0 8px #ff8c0070;'
+            : 'border-color:#ff8c0055;color:#ff8c00;';
+          return '<button class="g-filter-btn" style="'+baseStyle+'" onclick="setAgingPrio('+(p?"'"+p+"'":'null')+')">'+(p||'Todas')+'</button>';
+        }).join('');
+    }
+
     var datasets = CONTRACTS.map(function(c){
       var ag = ((ST[c.id].kpis||{}).aging)||AGING_BUCKETS.map(function(){ return 0; });
       /* Build per-bucket task lists for drilldown */
       var bucketTasks = AGING_BUCKETS.map(function(){ return []; });
       /* mesma base do KPI: corretivas, 1 por TSK, Não iniciado/Iniciado com dataCriacaoAS */
       ((ST[c.id].cls||{}).backlog||[]).forEach(function(t){
+        if(agingPrio && up(t.prioridade) !== agingPrio) return;
         var dt=safeDate(t.dataCriacaoAS);
         if(!dt) return;
         var mins=Math.round((agingNow-dt.getTime())/60000);
@@ -1609,7 +1634,7 @@
       _agingDrill.push({ contract:c, bucketTasks:bucketTasks });
       return {
         label:c.name,
-        data: AGING_BUCKETS.map(function(_,i){ return nn(ag[i]); }),
+        data: AGING_BUCKETS.map(function(_,i){ return agingPrio ? bucketTasks[i].length : nn(ag[i]); }),
         backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5
       };
     });
@@ -1635,7 +1660,7 @@
           y:{ grid:{color:'rgba(255,140,0,.06)'}, ticks:{font:{size:11}}, beginAtZero:true }
         },
         plugins:{
-          legend:{ position:'top', align:'end', labels:{boxWidth:10,font:{size:11},padding:14} },
+          legend:{ position:'bottom', labels:{boxWidth:10,font:{size:11},padding:20} },
           tooltip:{...TT, callbacks:{ footer:function(){ return 'Clique para ver lista'; } }},
           datalabels:{
             display:function(ctx){ return ctx.dataset.data[ctx.dataIndex]>0; },
@@ -1682,7 +1707,7 @@
   }
   function setProdPrio(kind, contractId, prio) {
     prodPrio[kind][contractId] = prio || null;
-    renderProdutividade();
+    renderProdutividade(contractId);
   }
 
   /* ── COMPUTE: encerramentos diários (últimos N dias) ────────
@@ -1797,13 +1822,17 @@
   }
 
   /* ── RENDER: PRODUTIVIDADE ────────────────────────────────── */
-  function renderProdutividade() {
+  function renderProdutividade(targetCid) {
     if (!allReady()) return;
     var rowD = document.getElementById('prodDiarioRow');
     var rowP = document.getElementById('prodPerdaRow');
-    rowD.innerHTML = ''; rowP.innerHTML = '';
+    if (!targetCid) { rowD.innerHTML = ''; rowP.innerHTML = ''; }
 
-    CONTRACTS.forEach(function(c) {
+    var toProcess = targetCid
+      ? CONTRACTS.filter(function(c){ return c.id === targetCid; })
+      : CONTRACTS;
+
+    toProcess.forEach(function(c) {
       if (ST[c.id].error) {
         var eD = document.createElement('div'); eD.className = 'g-card';
         eD.innerHTML = '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span>'+c.name+' — Últimos 30 dias</div><div class="g-empty" style="color:#e74c3c">'+escHtml(ST[c.id].error)+'</div>';
@@ -1826,7 +1855,10 @@
       var slaMedia = totEnc > 0 ? Math.round(totDen / totEnc * 1000) / 10 : 0;
       var pctCor = slaMedia >= 80 ? '#2ecc71' : slaMedia >= 60 ? '#f39c12' : '#e74c3c';
 
+      destroyChart('prodD_'+c.id);
+      destroyChart('prodP_'+c.id);
       var divD = document.createElement('div');
+      divD.id = 'prodDaily_'+c.id;
       divD.className = 'g-card';
       divD.innerHTML =
         '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+';box-shadow:0 0 7px '+c.color+'90"></span>'+c.name+' — Últimos 30 dias'+(selD?' · '+(selD==='PREDITIVA'?'Preditiva':selD):'')+'</div>'+
@@ -1838,10 +1870,10 @@
         '</div>'+
         (dias.length ? '<div class="g-cbox" style="height:200px;"><canvas id="prodD_'+c.id+'"></canvas></div>'
                      : '<div class="g-empty">Sem encerramentos'+(selD?' para este filtro':' no período')+'</div>');
-      rowD.appendChild(divD);
+      var _exD = document.getElementById('prodDaily_'+c.id);
+      if (_exD) rowD.replaceChild(divD, _exD); else rowD.appendChild(divD);
 
       if (dias.length) {
-        destroyChart('prodD_'+c.id);
         var pcts = dias.map(function(d) { return d.pct; });
         charts['prodD_'+c.id] = new Chart(document.getElementById('prodD_'+c.id), {
           type: 'bar',
@@ -1899,6 +1931,7 @@
 
       // ── Perdas por horário ──
       var divP = document.createElement('div');
+      divP.id = 'prodPerda_'+c.id;
       divP.className = 'g-card';
       var hrPico = 0, hrPicoCount = 0;
       perda.hrs.forEach(function(c2, hr) { if (c2 > hrPicoCount) { hrPicoCount = c2; hrPico = hr; } });
@@ -1909,10 +1942,10 @@
           ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+perda.total+' perdas · pico às '+hrPico+'h ('+hrPicoCount+')</div>'+
             '<div class="g-cbox" style="height:180px;"><canvas id="prodP_'+c.id+'"></canvas></div>'
           : '<div class="g-empty">Sem perdas de prazo'+(selP?' para este filtro':' no período')+'</div>');
-      rowP.appendChild(divP);
+      var _exP = document.getElementById('prodPerda_'+c.id);
+      if (_exP) rowP.replaceChild(divP, _exP); else rowP.appendChild(divP);
 
       if (perda.total > 0) {
-        destroyChart('prodP_'+c.id);
         var hrLabels = Array.from({length:24}, function(_,i){ return i+'h'; });
         var colors = perda.hrs.map(function(v, hr) {
           return hr === hrPico ? c.alpha+'0.95)' : c.alpha+'0.55)';
@@ -2329,10 +2362,12 @@
       var cciTot = tot(pc.CCI), campoTot = tot(pc.Campo), grand = cciTot + campoTot;
       function pp(n) { return grand > 0 ? n / grand * 100 : 0; }
       var cciPct = pp(cciTot), campoPct = pp(campoTot);
+      /* CCI usa cor distinta do contrato para não confundir com o Campo (TMG é azul = mesmo que #3498db) */
+      var cciColor = (c.color.toLowerCase() === '#3498db') ? '#a78bfa' : '#3498db';
       var barHtml = grand > 0
         ? '<div class="g-camp-bar-row">' +
             (campoTot > 0 ? '<div class="g-camp-seg" style="width:'+campoPct.toFixed(1)+'%;background:'+c.color+';color:#111">Campo '+campoPct.toFixed(0)+'%</div>' : '') +
-            (cciTot   > 0 ? '<div class="g-camp-seg" style="width:'+cciPct.toFixed(1)+'%;background:#3498db;color:#fff">CCI '+cciPct.toFixed(0)+'%</div>' : '') +
+            (cciTot   > 0 ? '<div class="g-camp-seg" style="width:'+cciPct.toFixed(1)+'%;background:'+cciColor+';color:#fff">CCI '+cciPct.toFixed(0)+'%</div>' : '') +
           '</div>'
         : '<div class="g-empty">Sem encerramentos no snapshot</div>';
 
@@ -2359,14 +2394,14 @@
         barHtml+
         '<div class="g-prod-kpis" style="grid-template-columns:repeat(3,1fr);margin-top:10px">'+
           '<div class="g-prod-kpi"'+(grand>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'Geral\',null)"':'')+'><div class="g-prod-kpi-val" style="color:var(--fg)">'+fmtN(grand)+'</div><div class="g-prod-kpi-lbl">Encerradas'+(grand>0?' ↗':'')+'</div></div>'+
-          '<div class="g-prod-kpi"'+(cciTot>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'CCI\',null)"':'')+'><div class="g-prod-kpi-val" style="color:#3498db">'+fmtN(cciTot)+'</div><div class="g-prod-kpi-lbl">CCI/CCO ('+cciPct.toFixed(1)+'%)'+(cciTot>0?' ↗':'')+'</div></div>'+
+          '<div class="g-prod-kpi"'+(cciTot>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'CCI\',null)"':'')+'><div class="g-prod-kpi-val" style="color:'+cciColor+'">'+fmtN(cciTot)+'</div><div class="g-prod-kpi-lbl">CCI/CCO ('+cciPct.toFixed(1)+'%)'+(cciTot>0?' ↗':'')+'</div></div>'+
           '<div class="g-prod-kpi"'+(campoTot>0?' style="cursor:pointer" onclick="openProdCatDrill(\''+c.id+'\',\'Campo\',null)"':'')+'><div class="g-prod-kpi-val" style="color:'+c.color+'">'+fmtN(campoTot)+'</div><div class="g-prod-kpi-lbl">Campo ('+campoPct.toFixed(1)+'%)'+(campoTot>0?' ↗':'')+'</div></div>'+
         '</div>'+
-        linhaCat('CCI', 'CCI/CCO', '#3498db')+
+        linhaCat('CCI', 'CCI/CCO', cciColor)+
         linhaCat('Campo', 'Campo', c.color)+
         '<div style="font-size:10px;color:var(--muted);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:8px">'+
-          (h30 ? '<span>Últimos 30 dias (histórico + hoje): CCI <b style="color:#3498db">'+fmtN(h30.cci)+'</b> · Campo <b style="color:'+c.color+'">'+fmtN(h30.campo)+'</b></span>' : '')+
-          '<span>Backlog atual: CCI <b style="color:#3498db">'+nn(K.cciBl)+'</b> · Campo <b style="color:'+c.color+'">'+nn(K.campoBl)+'</b></span>'+
+          (h30 ? '<span>Últimos 30 dias (histórico + hoje): CCI <b style="color:'+cciColor+'">'+fmtN(h30.cci)+'</b> · Campo <b style="color:'+c.color+'">'+fmtN(h30.campo)+'</b></span>' : '')+
+          '<span>Backlog atual: CCI <b style="color:'+cciColor+'">'+nn(K.cciBl)+'</b> · Campo <b style="color:'+c.color+'">'+nn(K.campoBl)+'</b></span>'+
         '</div>';
       row.appendChild(div);
     });
@@ -2375,6 +2410,9 @@
 
   /* Sites Fora com drilldown ──────────────────────────────── */
   var _sfDrillData = {};
+  var sfPrio = { trj: null, tmg: null, tne: null };
+  function setSfPrio(contractId, p) { sfPrio[contractId] = p||null; renderSitesForaDrill(); }
+
   function renderSitesForaDrill() {
     var row = document.getElementById('sitesForaDrillRow');
     if (!row) return;
@@ -2388,7 +2426,15 @@
         return;
       }
       var K = ST[c.id].kpis||{};
-      var incsAtivos = (ST[c.id].incs||[]).filter(function(i){ return up(i.statusTrat||'ATIVO')!=='RESOLVIDO'; });
+      var selSf = sfPrio[c.id];
+      var incsAtivos = (ST[c.id].incs||[]).filter(function(i){
+        if(up(i.statusTrat||'ATIVO')==='RESOLVIDO') return false;
+        if(selSf) {
+          var tsk = tskAbertaDe(ST[c.id].cls, i.enderecoId);
+          if(!tsk || up(tsk.prioridade) !== selSf) return false;
+        }
+        return true;
+      });
       var ibr = K.incidentsByRegion||{};
       var regs = Object.keys(ibr).sort(function(a,b){ return (ibr[b].total||0)-(ibr[a].total||0); });
       var maxR = regs.length ? (ibr[regs[0]].total||0) : 0;
@@ -2421,6 +2467,15 @@
         }).join('');
       }
       var safeId = c.id.replace(/'/g,"\\'");
+      /* chips de prioridade para Sites Fora */
+      var sfChips = '<div class="g-prio-row" style="margin:0 0 10px">' +
+        [null,'P1','P2','P3','P4','P5'].map(function(p) {
+          var active = selSf === p;
+          var st = active
+            ? 'background:'+c.color+';color:#111;border-color:'+c.color+';font-weight:800;'
+            : 'color:'+c.color+'99;border-color:'+c.color+'44;';
+          return '<button class="g-prio-btn" style="'+st+'" onclick="setSfPrio(\''+c.id+'\','+(p?"'"+p+"'":'null')+')">'+( p||'Todas')+'</button>';
+        }).join('') + '</div>';
       var div = document.createElement('div');
       div.className = 'g-card';
       div.innerHTML =
@@ -2431,6 +2486,7 @@
             '<div style="font-size:10px;color:#e74c3c;cursor:pointer;opacity:.7" onclick="openAllSitesFora(\''+safeId+'\')">↗ ver todos</div>'+
           '</div>'+
         '</div>'+
+        sfChips+
         '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">'+
           '<span style="color:#2ecc71">● '+comTskTot+' com TSK</span>'+
           '<span style="color:#e74c3c">● '+semTskTot+' sem TSK</span>'+
@@ -2543,6 +2599,152 @@
     applyChartTheme(); updateThemeBtn();
     renderedTabs = {}; render();     /* redesenha gráficos/cartões com as cores do tema */
   });
+  /* ── EXPORT XLSX ────────────────────────────────────────────── */
+  function exportarXlsx() {
+    if (typeof XLSX === 'undefined') { alert('SheetJS ainda não carregou. Aguarde e tente novamente.'); return; }
+    var wb = XLSX.utils.book_new();
+    var now = new Date();
+    var stamp = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    var filtered = contractFilter
+      ? CONTRACTS.filter(function(c){ return c.id===contractFilter; })
+      : CONTRACTS;
+
+    /* ── Aba 1: Resumo KPIs ── */
+    var kpiRows = [['Métrica', 'Total'].concat(filtered.map(function(c){ return c.name; }))];
+    var kpiDefs = [
+      { key:'sitesForaAtivos', lbl:'Sites Fora Ativos' },
+      { key:'backlogTotal',    lbl:'Backlog Total' },
+      { key:'foraSla',         lbl:'Fora do SLA' },
+      { key:'preditiva',       lbl:'Preditiva' },
+      { key:'slaGeral',        lbl:'SLA Geral (%)', pct:true },
+      { key:'backlogIndef',    lbl:'Sem SLA Definido' },
+      { key:'gmgFila',         lbl:'GMGs na Fila' }
+    ];
+    kpiDefs.forEach(function(d) {
+      var vals = filtered.map(function(c){ var v = nn((ST[c.id].kpis||{})[d.key]); return d.pct ? v.toFixed(1)+'%' : v; });
+      var total = d.pct
+        ? '—'
+        : filtered.reduce(function(s,c){ return s+nn((ST[c.id].kpis||{})[d.key]); },0);
+      kpiRows.push([d.lbl, total].concat(vals));
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiRows), 'KPIs');
+
+    /* ── Aba 2: Aging ── */
+    var agHdr = ['Faixa'].concat(filtered.map(function(c){ return c.name; })).concat(['Total']);
+    var agRows = [agHdr];
+    var agNow = Date.now();
+    AGING_BUCKETS.forEach(function(bkt, bi) {
+      var row = [bkt.label];
+      var tot = 0;
+      filtered.forEach(function(c) {
+        var count = 0;
+        ((ST[c.id].cls||{}).backlog||[]).forEach(function(t) {
+          if(agingPrio && up(t.prioridade) !== agingPrio) return;
+          var dt = safeDate(t.dataCriacaoAS);
+          if(!dt) return;
+          var mins = Math.round((agNow-dt.getTime())/60000);
+          if(mins>=bkt.min && mins<bkt.max) count++;
+        });
+        row.push(count); tot += count;
+      });
+      row.push(tot); agRows.push(row);
+    });
+    if(agingPrio) agRows[0][0] = 'Faixa (P: '+agingPrio+')';
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(agRows), 'Aging');
+
+    /* ── Aba 3: Sites Fora por Região ── */
+    var sfHdr = ['Contrato','Região','Total','Com TSK','Sem TSK'];
+    var sfRows = [sfHdr];
+    filtered.forEach(function(c) {
+      var selSf2 = sfPrio[c.id];
+      var incsAtivos2 = (ST[c.id].incs||[]).filter(function(i) {
+        if(up(i.statusTrat||'ATIVO')==='RESOLVIDO') return false;
+        if(selSf2) {
+          var tsk2 = tskAbertaDe(ST[c.id].cls, i.enderecoId);
+          if(!tsk2 || up(tsk2.prioridade) !== selSf2) return false;
+        }
+        return true;
+      });
+      var ibr2 = {};
+      incsAtivos2.forEach(function(i) {
+        var r = c.region(i)||'Outros';
+        if(!ibr2[r]) ibr2[r] = {total:0,comTsk:0,semTsk:0};
+        ibr2[r].total++;
+        if(tskAbertaDe(ST[c.id].cls, i.enderecoId)) ibr2[r].comTsk++; else ibr2[r].semTsk++;
+      });
+      Object.keys(ibr2).sort(function(a,b){ return ibr2[b].total-ibr2[a].total; }).forEach(function(r) {
+        sfRows.push([c.name, r, ibr2[r].total, ibr2[r].comTsk, ibr2[r].semTsk]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sfRows), 'Sites Fora');
+
+    /* ── Aba 4: Produtividade (30 dias) ── */
+    var pdHdr = ['Data'];
+    filtered.forEach(function(c) { pdHdr.push(c.name+' Dentro', c.name+' Fora', c.name+' Total', c.name+' %SLA'); });
+    var pdRows = [pdHdr];
+    var diasMap = {};
+    filtered.forEach(function(c) {
+      var selD2 = prodPrio.daily[c.id];
+      var hist2 = ST[c.id].prodHistory;
+      var dias2 = hist2 ? computeProdDiarioFromHistory(hist2, ST[c.id].cls, 30, selD2) : diasFromMap(computeProdDiario(ST[c.id].cls, 30, selD2));
+      dias2.forEach(function(d) { if(!diasMap[d.dia]) diasMap[d.dia]={}; diasMap[d.dia][c.id]=d; });
+    });
+    Object.keys(diasMap).sort().forEach(function(dia) {
+      var row = [dia];
+      filtered.forEach(function(c) {
+        var d = diasMap[dia][c.id] || {dentro:0,fora:0,total:0,pct:null};
+        row.push(d.dentro, d.fora, d.total, d.pct != null ? d.pct.toFixed(1)+'%' : '—');
+      });
+      pdRows.push(row);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pdRows), 'Produtividade');
+
+    /* ── Aba 5: Campo × CCI ── */
+    var ccHdr = ['Contrato','Encerradas','CCI','% CCI','Campo','% Campo','SLA CCI','SLA Campo'];
+    var ccRows = [ccHdr];
+    filtered.forEach(function(c) {
+      var K = ST[c.id].kpis||{};
+      var pc = K.prodCat||{CCI:{},Campo:{}};
+      function tot2(o){ return nn(o.dentro)+nn(o.fora)+nn(o.preditiva)+nn(o.semPrazo); }
+      var cciT = tot2(pc.CCI), campoT = tot2(pc.Campo), grand2 = cciT+campoT;
+      function pp2(n){ return grand2>0?Math.round(n/grand2*1000)/10:0; }
+      function sla2(o){ var b=nn(o.dentro)+nn(o.fora); return b>0?Math.round(nn(o.dentro)/b*1000)/10:null; }
+      ccRows.push([c.name, grand2, cciT, pp2(cciT).toFixed(1)+'%', campoT, pp2(campoT).toFixed(1)+'%',
+        sla2(pc.CCI)!=null?sla2(pc.CCI).toFixed(1)+'%':'—',
+        sla2(pc.Campo)!=null?sla2(pc.Campo).toFixed(1)+'%':'—']);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccRows), 'Campo x CCI');
+
+    /* ── Aba 6: Backlog completo ── */
+    var blHdr = ['Contrato','OS','Prioridade','Status','Região','Cidade','End_ID','Site','Fila','Status SLA','Criação'];
+    var blRows = [blHdr];
+    filtered.forEach(function(c) {
+      ((ST[c.id].cls||{}).backlog||[]).forEach(function(t) {
+        blRows.push([c.name, t.osNumero||'', t.prioridade||'', t.status||'', t.regiao||'', t.cidade||'',
+          t.enderecoId||'', t.siteId||'', t.filaAtual||'', t.statusSla||'',
+          t.dataCriacaoAS||t.dataCriacao||'']);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blRows), 'Backlog');
+
+    /* ── Aba 7: Incidentes Ativos ── */
+    var incHdr = ['Contrato','Horário','Site','End_ID','Região','Cidade','Causa','Detalhe','TSK Aberta'];
+    var incRows = [incHdr];
+    filtered.forEach(function(c) {
+      var incs2 = (ST[c.id].incs||[]).filter(function(i){ return up(i.statusTrat||'ATIVO')!=='RESOLVIDO'; });
+      incs2.forEach(function(i) {
+        var tsk3 = tskAbertaDe(ST[c.id].cls, i.enderecoId);
+        incRows.push([c.name, i.horario||fmtDt(i.horarioDt)||'', i.site||'', i.enderecoId||'',
+          c.region(i)||'', i.cidadeUf||i.cidade||'', i.causa||'', (i.detalhe||'').toString().trim(),
+          tsk3 ? (tsk3.osNumero||'') : '']);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(incRows), 'Incidentes Ativos');
+
+    var fname = 'devGERAL_'+(contractFilter||'todos')+'_'+now.toISOString().slice(0,10)+'.xlsx';
+    XLSX.writeFile(wb, fname);
+  }
+
   window.switchTab          = switchTab;
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
@@ -2556,6 +2758,9 @@
   window.toggleUpdKpiPrio   = toggleUpdKpiPrio;
   window.toggleUpdListPrio  = toggleUpdListPrio;
   window.setProdPrio        = setProdPrio;
+  window.setAgingPrio       = setAgingPrio;
+  window.setSfPrio          = setSfPrio;
+  window.exportarXlsx       = exportarXlsx;
   window.openUpdListDrill   = openUpdListDrill;
   window.openProdCatDrill   = openProdCatDrill;
   renderStrips();
