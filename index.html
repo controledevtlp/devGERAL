@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <!-- Tema claro/escuro (aplica o tema salvo antes da primeira pintura) -->
   <script src="theme.js"></script>
 
@@ -1594,8 +1594,12 @@
 
   /* ── AGING ────────────────────────────────────────────────── */
   var _agingDrill = []; /* [{contract, bucketIdx, tasks}] — por dataset index */
-  var agingPrio = null;
-  function setAgingPrio(p) { agingPrio = p||null; renderAging(); }
+  var agingPrio = [];
+  function setAgingPrio(p) {
+    if(!p) { agingPrio = []; }
+    else { var _ai=agingPrio.indexOf(p); if(_ai>=0) agingPrio.splice(_ai,1); else agingPrio.push(p); }
+    renderAging();
+  }
 
   function renderAging(){
     destroyChart('aging');
@@ -1607,7 +1611,7 @@
     if (fb) {
       fb.innerHTML = '<span class="g-filter-lbl">Prioridade:</span>' +
         [null,'P1','P2','P3','P4','P5'].map(function(p) {
-          var active = agingPrio === p;
+          var active = p ? agingPrio.indexOf(p) >= 0 : agingPrio.length === 0;
           var baseStyle = active
             ? 'background:#ff8c00;border-color:#ff8c00;color:#111;font-weight:800;box-shadow:0 0 8px #ff8c0070;'
             : 'border-color:#ff8c0055;color:#ff8c00;';
@@ -1621,7 +1625,7 @@
       var bucketTasks = AGING_BUCKETS.map(function(){ return []; });
       /* mesma base do KPI: corretivas, 1 por TSK, Não iniciado/Iniciado com dataCriacaoAS */
       ((ST[c.id].cls||{}).backlog||[]).forEach(function(t){
-        if(agingPrio && up(t.prioridade) !== agingPrio) return;
+        if(agingPrio.length > 0 && agingPrio.indexOf(up(t.prioridade)) < 0) return;
         var dt=safeDate(t.dataCriacaoAS);
         if(!dt) return;
         var mins=Math.round((agingNow-dt.getTime())/60000);
@@ -1629,12 +1633,19 @@
         var idx=AGING_BUCKETS.findIndex(function(b){ return mins>=b.min&&mins<b.max; });
         if(idx>=0) bucketTasks[idx].push(Object.assign({},t,{_contrato:c.name,_color:c.color,_ageMs:dt.getTime()}));
       });
-      /* mais antiga primeiro (igual ao drill de aging do público) */
-      bucketTasks.forEach(function(arr){ arr.sort(function(a,b){ return a._ageMs-b._ageMs; }); });
+      /* ordenado: prioridade → região → mais antiga */
+      var _PO={P1:1,P2:2,P3:3,P4:4,P5:5};
+      bucketTasks.forEach(function(arr){ arr.sort(function(a,b){
+        var pa=_PO[up(a.prioridade)]||99, pb=_PO[up(b.prioridade)]||99;
+        if(pa!==pb) return pa-pb;
+        var ra=(a.regiao||'').trim(), rb=(b.regiao||'').trim();
+        if(ra!==rb) return ra.localeCompare(rb);
+        return a._ageMs-b._ageMs;
+      }); });
       _agingDrill.push({ contract:c, bucketTasks:bucketTasks });
       return {
         label:c.name,
-        data: AGING_BUCKETS.map(function(_,i){ return agingPrio ? bucketTasks[i].length : nn(ag[i]); }),
+        data: AGING_BUCKETS.map(function(_,i){ return agingPrio.length > 0 ? bucketTasks[i].length : nn(ag[i]); }),
         backgroundColor:c.alpha+'0.80)', borderColor:c.color, borderWidth:1, borderRadius:5
       };
     });
@@ -2435,12 +2446,23 @@
         }
         return true;
       });
-      var ibr = K.incidentsByRegion||{};
+      var ibr;
+      if (selSf) {
+        ibr = {};
+        incsAtivos.forEach(function(i) {
+          var _r = c.region(i)||'Outros';
+          if(!ibr[_r]) ibr[_r] = {total:0,comTsk:0,semTsk:0};
+          ibr[_r].total++;
+          if(tskAbertaDe(ST[c.id].cls, i.enderecoId)) ibr[_r].comTsk++; else ibr[_r].semTsk++;
+        });
+      } else {
+        ibr = K.incidentsByRegion||{};
+      }
       var regs = Object.keys(ibr).sort(function(a,b){ return (ibr[b].total||0)-(ibr[a].total||0); });
       var maxR = regs.length ? (ibr[regs[0]].total||0) : 0;
       var comTskTot=0, semTskTot=0;
       regs.forEach(function(r){ comTskTot+=(ibr[r].comTsk||0); semTskTot+=(ibr[r].semTsk||0); });
-      var total = nn(K.sitesForaAtivos);
+      var total = selSf ? incsAtivos.length : nn(K.sitesForaAtivos);
       /* drill por região + drill geral */
       _sfDrillData[c.id] = { '__all__': incsAtivos };
       regs.forEach(function(r){
@@ -2600,149 +2622,395 @@
     renderedTabs = {}; render();     /* redesenha gráficos/cartões com as cores do tema */
   });
   /* ── EXPORT XLSX ────────────────────────────────────────────── */
-  function exportarXlsx() {
-    if (typeof XLSX === 'undefined') { alert('SheetJS ainda não carregou. Aguarde e tente novamente.'); return; }
-    var wb = XLSX.utils.book_new();
-    var now = new Date();
-    var stamp = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    var filtered = contractFilter
-      ? CONTRACTS.filter(function(c){ return c.id===contractFilter; })
-      : CONTRACTS;
+  async function exportarXlsx() {
+    if (typeof ExcelJS === 'undefined') { alert('ExcelJS ainda não carregou. Aguarde e tente novamente.'); return; }
+    var btn = document.querySelector('.g-btn[onclick*="exportarXlsx"]');
+    var bHtml = btn ? btn.innerHTML : '';
+    if(btn) { btn.disabled=true; btn.textContent='⏳ Gerando...'; }
+    try {
+      var now = new Date();
+      var filtered = contractFilter
+        ? CONTRACTS.filter(function(c){ return c.id===contractFilter; })
+        : CONTRACTS;
+      var wb = new ExcelJS.Workbook();
+      wb.creator = 'devGERAL'; wb.created = now;
 
-    /* ── Aba 1: Resumo KPIs ── */
-    var kpiRows = [['Métrica', 'Total'].concat(filtered.map(function(c){ return c.name; }))];
-    var kpiDefs = [
-      { key:'sitesForaAtivos', lbl:'Sites Fora Ativos' },
-      { key:'backlogTotal',    lbl:'Backlog Total' },
-      { key:'foraSla',         lbl:'Fora do SLA' },
-      { key:'preditiva',       lbl:'Preditiva' },
-      { key:'slaGeral',        lbl:'SLA Geral (%)', pct:true },
-      { key:'backlogIndef',    lbl:'Sem SLA Definido' },
-      { key:'gmgFila',         lbl:'GMGs na Fila' }
-    ];
-    kpiDefs.forEach(function(d) {
-      var vals = filtered.map(function(c){ var v = nn((ST[c.id].kpis||{})[d.key]); return d.pct ? v.toFixed(1)+'%' : v; });
-      var total = d.pct
-        ? '—'
-        : filtered.reduce(function(s,c){ return s+nn((ST[c.id].kpis||{})[d.key]); },0);
-      kpiRows.push([d.lbl, total].concat(vals));
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiRows), 'KPIs');
+      /* ── Paleta ── */
+      var CL = {
+        hdr:'1A1C2E', hdr2:'252840', rowA:'111122', rowB:'181830',
+        fg:'F0F0F8', muted:'888899', prime:'FF8C00',
+        green:'2ECC71', red:'E74C3C', yel:'F39C12', cci:'A78BFA'
+      };
+      var PCOL = { P1:CL.red, P2:CL.yel, P3:CL.prime, P4:CL.muted, P5:CL.muted };
 
-    /* ── Aba 2: Aging ── */
-    var agHdr = ['Faixa'].concat(filtered.map(function(c){ return c.name; })).concat(['Total']);
-    var agRows = [agHdr];
-    var agNow = Date.now();
-    AGING_BUCKETS.forEach(function(bkt, bi) {
-      var row = [bkt.label];
-      var tot = 0;
-      filtered.forEach(function(c) {
-        var count = 0;
-        ((ST[c.id].cls||{}).backlog||[]).forEach(function(t) {
-          if(agingPrio && up(t.prioridade) !== agingPrio) return;
-          var dt = safeDate(t.dataCriacaoAS);
-          if(!dt) return;
-          var mins = Math.round((agNow-dt.getTime())/60000);
-          if(mins>=bkt.min && mins<bkt.max) count++;
+      function ab(h){ return 'FF'+h.replace('#','').toUpperCase(); }
+      function fl(h){ return {type:'pattern',pattern:'solid',fgColor:{argb:ab(h)}}; }
+      function fn(h,b,s){ var f={}; if(h)f.color={argb:ab(h)}; if(b)f.bold=true; if(s)f.size=s; return f; }
+      function sc(ws,r,c,v,bg,fg,bold,alignH){
+        var cell=ws.getCell(r,c); cell.value=v;
+        if(bg) cell.fill=fl(bg);
+        if(fg||bold) cell.font=fn(fg,bold);
+        cell.alignment=alignH?{horizontal:alignH,vertical:'middle'}:{vertical:'middle',indent:1};
+        return cell;
+      }
+      function titleRow(ws,r,txt,cols,bgH,fgH){
+        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=30;
+        sc(ws,r,1,txt,bgH||CL.hdr,fgH||CL.prime,true,'center');
+      }
+      function infoRow(ws,r,txt,cols){
+        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=14;
+        sc(ws,r,1,txt,CL.hdr,CL.muted,false,'left');
+      }
+      function hdrRow(ws,r,headers,bgH){
+        ws.getRow(r).height=18;
+        headers.forEach(function(h,ci){
+          var cell=ws.getCell(r,ci+1); cell.value=h;
+          cell.fill=fl(bgH||CL.hdr2); cell.font=fn('FFFFFF',true,9);
+          cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+          cell.border={bottom:{style:'medium',color:{argb:ab(CL.prime)}}};
         });
-        row.push(count); tot += count;
-      });
-      row.push(tot); agRows.push(row);
-    });
-    if(agingPrio) agRows[0][0] = 'Faixa (P: '+agingPrio+')';
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(agRows), 'Aging');
+      }
+      function rowbg(i){ return i%2===0?CL.rowA:CL.rowB; }
+      function backBtn(ws,r){
+        ws.getRow(r).height=18;
+        var cell=ws.getCell(r,1);
+        cell.value={text:'← Voltar ao Menu Principal',hyperlink:'#Menu!A1'};
+        cell.font=fn(CL.prime,true); cell.fill=fl(CL.hdr);
+        cell.alignment={vertical:'middle',indent:1};
+      }
+      function contractHdr(ws,r,c,txt,cols){
+        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=24;
+        var cell=ws.getCell(r,1); cell.value=txt;
+        cell.fill=fl(c.color.replace('#','').toUpperCase());
+        cell.font=fn('111111',true,11); cell.alignment={horizontal:'left',vertical:'middle',indent:1};
+      }
+      function chex(c){ return c.color.replace('#','').toUpperCase(); }
 
-    /* ── Aba 3: Sites Fora por Região ── */
-    var sfHdr = ['Contrato','Região','Total','Com TSK','Sem TSK'];
-    var sfRows = [sfHdr];
-    filtered.forEach(function(c) {
-      var selSf2 = sfPrio[c.id];
-      var incsAtivos2 = (ST[c.id].incs||[]).filter(function(i) {
-        if(up(i.statusTrat||'ATIVO')==='RESOLVIDO') return false;
-        if(selSf2) {
-          var tsk2 = tskAbertaDe(ST[c.id].cls, i.enderecoId);
-          if(!tsk2 || up(tsk2.prioridade) !== selSf2) return false;
-        }
-        return true;
-      });
-      var ibr2 = {};
-      incsAtivos2.forEach(function(i) {
-        var r = c.region(i)||'Outros';
-        if(!ibr2[r]) ibr2[r] = {total:0,comTsk:0,semTsk:0};
-        ibr2[r].total++;
-        if(tskAbertaDe(ST[c.id].cls, i.enderecoId)) ibr2[r].comTsk++; else ibr2[r].semTsk++;
-      });
-      Object.keys(ibr2).sort(function(a,b){ return ibr2[b].total-ibr2[a].total; }).forEach(function(r) {
-        sfRows.push([c.name, r, ibr2[r].total, ibr2[r].comTsk, ibr2[r].semTsk]);
-      });
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sfRows), 'Sites Fora');
+      var fStr = 'Extraído: '+now.toLocaleString('pt-BR')+'  |  '+
+        (contractFilter?(filtered[0]||{}).name:'TRJ · TMG · TNE')+
+        (agingPrio.length>0?'  |  Aging P: '+agingPrio.join('+'):'');
+      var PO = {P1:1,P2:2,P3:3,P4:4,P5:5};
 
-    /* ── Aba 4: Produtividade (30 dias) ── */
-    var pdHdr = ['Data'];
-    filtered.forEach(function(c) { pdHdr.push(c.name+' Dentro', c.name+' Fora', c.name+' Total', c.name+' %SLA'); });
-    var pdRows = [pdHdr];
-    var diasMap = {};
-    filtered.forEach(function(c) {
-      var selD2 = prodPrio.daily[c.id];
-      var hist2 = ST[c.id].prodHistory;
-      var dias2 = hist2 ? computeProdDiarioFromHistory(hist2, ST[c.id].cls, 30, selD2) : diasFromMap(computeProdDiario(ST[c.id].cls, 30, selD2));
-      dias2.forEach(function(d) { if(!diasMap[d.dia]) diasMap[d.dia]={}; diasMap[d.dia][c.id]=d; });
-    });
-    Object.keys(diasMap).sort().forEach(function(dia) {
-      var row = [dia];
-      filtered.forEach(function(c) {
-        var d = diasMap[dia][c.id] || {dentro:0,fora:0,total:0,pct:null};
-        row.push(d.dentro, d.fora, d.total, d.pct != null ? d.pct.toFixed(1)+'%' : '—');
+      /* ══════════════════ MENU ══════════════════ */
+      var wsM = wb.addWorksheet('Menu',{properties:{tabColor:{argb:ab(CL.prime)}}});
+      wsM.columns=[{width:5},{width:30},{width:55},{width:16}];
+      wsM.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsM,1,'devGERAL — Dashboard TRJ · TMG · TNE',4);
+      infoRow(wsM,2,fStr,4);
+      wsM.getRow(3).height=8;
+      [1,2,3,4].forEach(function(ci){ wsM.getCell(3,ci).fill=fl(CL.hdr); });
+      hdrRow(wsM,4,['#','Aba','Descrição','Ir para'],CL.hdr2);
+      [
+        {s:'KPIs',         d:'Indicadores: sites fora, backlog, SLA, GMGs por contrato',   fc:CL.green},
+        {s:'Aging',        d:'Backlog por faixa de tempo em aberto + drilldown completo',   fc:CL.yel},
+        {s:'Sites Fora',   d:'Incidentes ativos por região (volumetria filtrada) + lista',  fc:CL.red},
+        {s:'Produtividade',d:'Encerramentos diários por contrato nos últimos 30 dias',      fc:CL.green},
+        {s:'Campo x CCI',  d:'Produção Campo × CCI/CCO com SLA por contrato',               fc:CL.cci},
+        {s:'Backlog',      d:'Lista de TSKs em aberto ordenada por prioridade e região',    fc:CL.prime},
+        {s:'Incidentes',   d:'Incidentes ativos com TSK vinculada, duração e causa',        fc:CL.red}
+      ].forEach(function(item,i){
+        var r=5+i, b=rowbg(i);
+        wsM.getRow(r).height=22;
+        sc(wsM,r,1,i+1,b,CL.muted,true,'center');
+        sc(wsM,r,2,item.s,b,item.fc,true);
+        sc(wsM,r,3,item.d,b,CL.muted);
+        var lc=wsM.getCell(r,4);
+        lc.value={text:'→ Abrir',hyperlink:'#'+item.s+'!A1'};
+        lc.font=fn(CL.prime,true); lc.fill=fl(b); lc.alignment={horizontal:'center',vertical:'middle'};
       });
-      pdRows.push(row);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pdRows), 'Produtividade');
 
-    /* ── Aba 5: Campo × CCI ── */
-    var ccHdr = ['Contrato','Encerradas','CCI','% CCI','Campo','% Campo','SLA CCI','SLA Campo'];
-    var ccRows = [ccHdr];
-    filtered.forEach(function(c) {
-      var K = ST[c.id].kpis||{};
-      var pc = K.prodCat||{CCI:{},Campo:{}};
-      function tot2(o){ return nn(o.dentro)+nn(o.fora)+nn(o.preditiva)+nn(o.semPrazo); }
-      var cciT = tot2(pc.CCI), campoT = tot2(pc.Campo), grand2 = cciT+campoT;
-      function pp2(n){ return grand2>0?Math.round(n/grand2*1000)/10:0; }
-      function sla2(o){ var b=nn(o.dentro)+nn(o.fora); return b>0?Math.round(nn(o.dentro)/b*1000)/10:null; }
-      ccRows.push([c.name, grand2, cciT, pp2(cciT).toFixed(1)+'%', campoT, pp2(campoT).toFixed(1)+'%',
-        sla2(pc.CCI)!=null?sla2(pc.CCI).toFixed(1)+'%':'—',
-        sla2(pc.Campo)!=null?sla2(pc.Campo).toFixed(1)+'%':'—']);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ccRows), 'Campo x CCI');
-
-    /* ── Aba 6: Backlog completo ── */
-    var blHdr = ['Contrato','OS','Prioridade','Status','Região','Cidade','End_ID','Site','Fila','Status SLA','Criação'];
-    var blRows = [blHdr];
-    filtered.forEach(function(c) {
-      ((ST[c.id].cls||{}).backlog||[]).forEach(function(t) {
-        blRows.push([c.name, t.osNumero||'', t.prioridade||'', t.status||'', t.regiao||'', t.cidade||'',
-          t.enderecoId||'', t.siteId||'', t.filaAtual||'', t.statusSla||'',
-          t.dataCriacaoAS||t.dataCriacao||'']);
+      /* ══════════════════ KPIs ══════════════════ */
+      var wsK = wb.addWorksheet('KPIs',{properties:{tabColor:{argb:ab(CL.green)}}});
+      var kCols = 3+filtered.length;
+      wsK.columns=[{width:4},{width:26},{width:12}].concat(filtered.map(function(){return {width:14};}));
+      wsK.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsK,1,'KPIs — Indicadores Consolidados',kCols);
+      infoRow(wsK,2,fStr,kCols);
+      hdrRow(wsK,3,['','Métrica','Total'].concat(filtered.map(function(c){return c.name;})));
+      [
+        {key:'sitesForaAtivos',lbl:'Sites Fora Ativos', fg:CL.red},
+        {key:'backlogTotal',   lbl:'Backlog Total',     fg:CL.yel},
+        {key:'foraSla',        lbl:'Fora do SLA',       fg:CL.red},
+        {key:'preditiva',      lbl:'Preditiva',         fg:CL.yel},
+        {key:'slaGeral',       lbl:'SLA Geral (%)',     fg:CL.green, pct:true},
+        {key:'backlogIndef',   lbl:'Sem SLA Definido',  fg:CL.muted},
+        {key:'gmgFila',        lbl:'GMGs na Fila',      fg:CL.red}
+      ].forEach(function(d,i){
+        var r=4+i, b=rowbg(i);
+        wsK.getRow(r).height=20; wsK.getCell(r,1).fill=fl(b);
+        sc(wsK,r,2,d.lbl,b,d.fg,true);
+        var tot=d.pct?'—':filtered.reduce(function(s,c){return s+nn((ST[c.id].kpis||{})[d.key]);},0);
+        sc(wsK,r,3,tot,b,d.pct?CL.muted:CL.prime,true,'center');
+        filtered.forEach(function(c,ci){
+          var v=nn((ST[c.id].kpis||{})[d.key]);
+          sc(wsK,r,4+ci,d.pct?v.toFixed(1)+'%':v,b,chex(c),false,'center');
+        });
       });
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blRows), 'Backlog');
+      wsK.addRow([]); backBtn(wsK,wsK.rowCount+1);
 
-    /* ── Aba 7: Incidentes Ativos ── */
-    var incHdr = ['Contrato','Horário','Site','End_ID','Região','Cidade','Causa','Detalhe','TSK Aberta'];
-    var incRows = [incHdr];
-    filtered.forEach(function(c) {
-      var incs2 = (ST[c.id].incs||[]).filter(function(i){ return up(i.statusTrat||'ATIVO')!=='RESOLVIDO'; });
-      incs2.forEach(function(i) {
-        var tsk3 = tskAbertaDe(ST[c.id].cls, i.enderecoId);
-        incRows.push([c.name, i.horario||fmtDt(i.horarioDt)||'', i.site||'', i.enderecoId||'',
-          c.region(i)||'', i.cidadeUf||i.cidade||'', i.causa||'', (i.detalhe||'').toString().trim(),
-          tsk3 ? (tsk3.osNumero||'') : '']);
+      /* ══════════════════ AGING ══════════════════ */
+      var wsA = wb.addWorksheet('Aging',{properties:{tabColor:{argb:ab(CL.yel)}}});
+      var aCols = 3+filtered.length;
+      wsA.columns=[{width:4},{width:16}].concat(filtered.map(function(){return {width:14};})).concat([{width:10}]);
+      wsA.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsA,1,'Aging do Backlog — Distribuição por Faixa de Tempo',aCols);
+      infoRow(wsA,2,fStr+(agingPrio.length>0?'  |  P: '+agingPrio.join('+'):''),aCols);
+      hdrRow(wsA,3,['','Faixa'].concat(filtered.map(function(c){return c.name;})).concat(['Total']));
+      var agNow2=Date.now(), aRowStart=4;
+      AGING_BUCKETS.forEach(function(bkt,bi){
+        var r=aRowStart+bi, b=rowbg(bi), rowTot=0;
+        wsA.getRow(r).height=20; wsA.getCell(r,1).fill=fl(b);
+        sc(wsA,r,2,bkt.label,b,CL.fg,true);
+        filtered.forEach(function(c,ci){
+          var cnt=0;
+          ((ST[c.id].cls||{}).backlog||[]).forEach(function(t){
+            if(agingPrio.length>0&&agingPrio.indexOf(up(t.prioridade))<0) return;
+            var dt=safeDate(t.dataCriacaoAS); if(!dt) return;
+            var mins=Math.round((agNow2-dt.getTime())/60000);
+            if(mins>=bkt.min&&mins<bkt.max) cnt++;
+          });
+          sc(wsA,r,3+ci,cnt,b,chex(c),cnt>0,'center'); rowTot+=cnt;
+        });
+        sc(wsA,r,3+filtered.length,rowTot,b,CL.prime,true,'center');
       });
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(incRows), 'Incidentes Ativos');
+      /* Drilldown */
+      var aDH=aRowStart+AGING_BUCKETS.length+1, dCols=Math.max(aCols,7);
+      wsA.getRow(aDH-1).height=10; wsA.getCell(aDH-1,1).fill=fl(CL.hdr);
+      wsA.mergeCells(aDH,1,aDH,dCols); wsA.getRow(aDH).height=22;
+      var dhCell=wsA.getCell(aDH,1);
+      dhCell.value='DRILLDOWN — TSKs em Backlog  (Prioridade → Região → Tempo em Aberto)';
+      dhCell.fill=fl(CL.hdr2); dhCell.font=fn(CL.prime,true,10);
+      dhCell.alignment={horizontal:'left',vertical:'middle',indent:1};
+      hdrRow(wsA,aDH+1,['','Contrato','OS','Prioridade','Região','Tempo em Aberto','Cidade']);
+      var dR=aDH+2;
+      filtered.forEach(function(c){
+        var tasks=((ST[c.id].cls||{}).backlog||[]).filter(function(t){
+          if(agingPrio.length>0&&agingPrio.indexOf(up(t.prioridade))<0) return false;
+          return !!safeDate(t.dataCriacaoAS);
+        });
+        tasks.sort(function(a,b2){
+          var pa=PO[up(a.prioridade)]||99, pb2=PO[up(b2.prioridade)]||99;
+          if(pa!==pb2) return pa-pb2;
+          var ra=(a.regiao||'').trim(), rb2=(b2.regiao||'').trim();
+          if(ra!==rb2) return ra.localeCompare(rb2,'pt-BR');
+          var da=safeDate(a.dataCriacaoAS), db2=safeDate(b2.dataCriacaoAS);
+          return (da?da.getTime():9e15)-(db2?db2.getTime():9e15);
+        });
+        tasks.forEach(function(t,ti){
+          var b2=rowbg(ti), dt=safeDate(t.dataCriacaoAS);
+          var elH=dt?Math.floor((Date.now()-dt.getTime())/3600000):0;
+          var el=elH<24?elH+'h':(elH/24).toFixed(1)+'d';
+          wsA.getRow(dR).height=15; wsA.getCell(dR,1).fill=fl(b2);
+          sc(wsA,dR,2,c.name,b2,chex(c),true,'center');
+          sc(wsA,dR,3,t.osNumero||'—',b2,CL.fg,true);
+          sc(wsA,dR,4,t.prioridade||'—',b2,PCOL[up(t.prioridade)]||CL.muted,true,'center');
+          sc(wsA,dR,5,t.regiao||'—',b2,CL.fg);
+          sc(wsA,dR,6,el,b2,CL.red,true,'center');
+          sc(wsA,dR,7,t.cidade||'—',b2,CL.muted);
+          dR++;
+        });
+      });
+      wsA.addRow([]); backBtn(wsA,wsA.rowCount+1);
 
-    var fname = 'devGERAL_'+(contractFilter||'todos')+'_'+now.toISOString().slice(0,10)+'.xlsx';
-    XLSX.writeFile(wb, fname);
+      /* ══════════════════ SITES FORA ══════════════════ */
+      var wsSF = wb.addWorksheet('Sites Fora',{properties:{tabColor:{argb:ab(CL.red)}}});
+      wsSF.columns=[{width:4},{width:22},{width:10},{width:10},{width:10},{width:8},{width:18},{width:12},{width:24}];
+      wsSF.views=[{state:'frozen',ySplit:2}];
+      titleRow(wsSF,1,'Sites Fora — Incidentes Ativos por Região',9);
+      infoRow(wsSF,2,fStr,9);
+      var sfR=3;
+      filtered.forEach(function(c){
+        var selSf4=sfPrio[c.id];
+        var incsA4=(ST[c.id].incs||[]).filter(function(i){
+          if(up(i.statusTrat||'ATIVO')==='RESOLVIDO') return false;
+          if(selSf4){ var t4=tskAbertaDe(ST[c.id].cls,i.enderecoId); if(!t4||up(t4.prioridade)!==selSf4) return false; }
+          return true;
+        });
+        var ibr4={};
+        incsA4.forEach(function(i){
+          var reg=c.region(i)||'Outros';
+          if(!ibr4[reg]) ibr4[reg]={total:0,comTsk:0,semTsk:0};
+          ibr4[reg].total++;
+          if(tskAbertaDe(ST[c.id].cls,i.enderecoId)) ibr4[reg].comTsk++; else ibr4[reg].semTsk++;
+        });
+        var regs4=Object.keys(ibr4).sort(function(a,b2){return ibr4[b2].total-ibr4[a].total;});
+        contractHdr(wsSF,sfR,c,c.name+' — '+(ST[c.id].label||'')+
+          (selSf4?'  |  Filtro P: '+selSf4:'  |  Todas as prioridades')+'  |  Total: '+incsA4.length+' incidentes',9); sfR++;
+        hdrRow(wsSF,sfR,['','Região','Total','Com TSK','Sem TSK','% c/TSK','','','']); sfR++;
+        regs4.forEach(function(reg4,ri){
+          var v4=ibr4[reg4], comPct4=v4.total>0?Math.round(v4.comTsk/v4.total*100):0, b4=rowbg(ri);
+          wsSF.getRow(sfR).height=18; wsSF.getCell(sfR,1).fill=fl(b4);
+          sc(wsSF,sfR,2,reg4,b4,chex(c),true);
+          sc(wsSF,sfR,3,v4.total,b4,CL.red,true,'center');
+          sc(wsSF,sfR,4,v4.comTsk,b4,CL.green,false,'center');
+          sc(wsSF,sfR,5,v4.semTsk,b4,CL.red,false,'center');
+          sc(wsSF,sfR,6,comPct4+'%',b4,comPct4>=70?CL.green:comPct4>=40?CL.yel:CL.red,true,'center');
+          for(var _c=7;_c<=9;_c++) wsSF.getCell(sfR,_c).fill=fl(b4);
+          sfR++;
+        });
+        if(!regs4.length){ wsSF.getRow(sfR).height=16; sc(wsSF,sfR,2,'✓ Nenhum incidente ativo',CL.rowA,CL.green); for(var _c2=1;_c2<=9;_c2++){if(_c2!==2)wsSF.getCell(sfR,_c2).fill=fl(CL.rowA);} sfR++; }
+        wsSF.getRow(sfR).height=6; for(var _cs=1;_cs<=9;_cs++) wsSF.getCell(sfR,_cs).fill=fl(CL.hdr); sfR++;
+        hdrRow(wsSF,sfR,['','Site','Horário','Duração','Região','TSK','P.','Causa','Detalhe']); sfR++;
+        var incsSort4=incsA4.slice().sort(function(a,b2){
+          var ta=safeDate(a.horarioDt),tb2=safeDate(b2.horarioDt);
+          return (ta?ta.getTime():9e15)-(tb2?tb2.getTime():9e15);
+        });
+        var nowSF=Date.now();
+        incsSort4.forEach(function(inc,ii){
+          var b5=rowbg(ii), hDt=safeDate(inc.horarioDt);
+          var durH=hDt?Math.floor((nowSF-hDt.getTime())/3600000):0;
+          var dur=durH<24?durH+'h':(durH/24).toFixed(1)+'d';
+          var tsk5=tskAbertaDe(ST[c.id].cls,inc.enderecoId);
+          wsSF.getRow(sfR).height=15; wsSF.getCell(sfR,1).fill=fl(b5);
+          sc(wsSF,sfR,2,inc.site||inc.enderecoId||'—',b5,CL.fg,true);
+          sc(wsSF,sfR,3,inc.horario||fmtDt(inc.horarioDt)||'—',b5,CL.muted,false,'center');
+          sc(wsSF,sfR,4,dur,b5,CL.red,true,'center');
+          sc(wsSF,sfR,5,c.region(inc)||'—',b5,CL.muted);
+          sc(wsSF,sfR,6,tsk5?(tsk5.osNumero||'—'):'SEM TSK',b5,tsk5?CL.yel:CL.red,!tsk5);
+          sc(wsSF,sfR,7,tsk5?(tsk5.prioridade||'—'):'—',b5,tsk5?(PCOL[up(tsk5.prioridade)]||CL.muted):CL.muted,false,'center');
+          sc(wsSF,sfR,8,inc.causa||'—',b5,CL.muted);
+          sc(wsSF,sfR,9,(inc.detalhe||'').toString().trim().slice(0,100),b5,CL.muted);
+          sfR++;
+        });
+        wsSF.getRow(sfR).height=10; for(var _cs2=1;_cs2<=9;_cs2++) wsSF.getCell(sfR,_cs2).fill=fl(CL.hdr); sfR++;
+      });
+      backBtn(wsSF,sfR);
+
+      /* ══════════════════ PRODUTIVIDADE ══════════════════ */
+      var wsP = wb.addWorksheet('Produtividade',{properties:{tabColor:{argb:ab('2ECC71')}}});
+      wsP.columns=[{width:4},{width:12},{width:12},{width:12},{width:10},{width:10}];
+      wsP.views=[{state:'frozen',ySplit:2}];
+      titleRow(wsP,1,'Produtividade — Encerramentos Diários (30 dias)',6);
+      infoRow(wsP,2,fStr,6);
+      var pR=3;
+      filtered.forEach(function(c){
+        var selD4=prodPrio.daily[c.id];
+        var hist4=ST[c.id].prodHistory;
+        var dias4=hist4?computeProdDiarioFromHistory(hist4,ST[c.id].cls,30,selD4):diasFromMap(computeProdDiario(ST[c.id].cls,30,selD4));
+        contractHdr(wsP,pR,c,c.name+(selD4?' — Prioridade: '+selD4:' — Todas as prioridades'),6); pR++;
+        hdrRow(wsP,pR,['','Data','Dentro SLA','Fora SLA','Total','% SLA']); pR++;
+        var totDen=0, totFora=0, totTot=0;
+        dias4.forEach(function(d,di){
+          var b6=rowbg(di);
+          wsP.getRow(pR).height=15; wsP.getCell(pR,1).fill=fl(b6);
+          sc(wsP,pR,2,d.dia,b6,CL.muted,false,'center');
+          sc(wsP,pR,3,d.dentro,b6,CL.green,false,'center');
+          sc(wsP,pR,4,d.fora,b6,CL.red,false,'center');
+          sc(wsP,pR,5,d.total,b6,CL.fg,true,'center');
+          var slaV=d.pct!=null?d.pct.toFixed(1)+'%':'—';
+          sc(wsP,pR,6,slaV,b6,d.pct!=null?(d.pct>=80?CL.green:d.pct>=60?CL.yel:CL.red):CL.muted,true,'center');
+          totDen+=d.dentro; totFora+=d.fora; totTot+=d.total; pR++;
+        });
+        wsP.getRow(pR).height=20; wsP.mergeCells(pR,1,pR,2);
+        sc(wsP,pR,1,'TOTAL 30 DIAS',CL.hdr2,CL.prime,true);
+        var slaTot=totTot>0?(totDen/totTot*100).toFixed(1)+'%':'—';
+        sc(wsP,pR,3,totDen,CL.hdr2,CL.green,true,'center');
+        sc(wsP,pR,4,totFora,CL.hdr2,CL.red,true,'center');
+        sc(wsP,pR,5,totTot,CL.hdr2,CL.fg,true,'center');
+        sc(wsP,pR,6,slaTot,CL.hdr2,totTot>0&&totDen/totTot>=0.8?CL.green:CL.yel,true,'center'); pR++;
+        wsP.getRow(pR).height=10; for(var _cp=1;_cp<=6;_cp++) wsP.getCell(pR,_cp).fill=fl(CL.hdr); pR++;
+      });
+      backBtn(wsP,pR);
+
+      /* ══════════════════ CAMPO x CCI ══════════════════ */
+      var wsCC = wb.addWorksheet('Campo x CCI',{properties:{tabColor:{argb:ab(CL.cci)}}});
+      wsCC.columns=[{width:4},{width:20},{width:12},{width:10},{width:10},{width:10},{width:10},{width:20}];
+      wsCC.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsCC,1,'Produção — Campo × CCI/CCO por Contrato',8);
+      infoRow(wsCC,2,fStr,8);
+      hdrRow(wsCC,3,['','Contrato','Encerradas','CCI Qtd','% CCI','Campo Qtd','% Campo','SLA CCI  ·  Campo']);
+      filtered.forEach(function(c,i){
+        var K7=ST[c.id].kpis||{}, pc7=K7.prodCat||{CCI:{},Campo:{}};
+        function tot7(o){return nn(o.dentro)+nn(o.fora)+nn(o.preditiva)+nn(o.semPrazo);}
+        var cciT7=tot7(pc7.CCI), campoT7=tot7(pc7.Campo), grand7=cciT7+campoT7;
+        function pp7(n){ return grand7>0?Math.round(n/grand7*1000)/10:0; }
+        function sla7(o){ var bv=nn(o.dentro)+nn(o.fora); return bv>0?Math.round(nn(o.dentro)/bv*1000)/10:null; }
+        var r=4+i, b=rowbg(i);
+        wsCC.getRow(r).height=22; wsCC.getCell(r,1).fill=fl(b);
+        sc(wsCC,r,2,c.name,b,chex(c),true);
+        sc(wsCC,r,3,grand7,b,CL.fg,true,'center');
+        sc(wsCC,r,4,cciT7,b,CL.cci,false,'center');
+        sc(wsCC,r,5,pp7(cciT7).toFixed(1)+'%',b,CL.cci,false,'center');
+        sc(wsCC,r,6,campoT7,b,chex(c),false,'center');
+        sc(wsCC,r,7,pp7(campoT7).toFixed(1)+'%',b,chex(c),false,'center');
+        var sStr=(sla7(pc7.CCI)!=null?sla7(pc7.CCI).toFixed(1)+'% CCI':'— CCI')+'  ·  '+(sla7(pc7.Campo)!=null?sla7(pc7.Campo).toFixed(1)+'% Campo':'— Campo');
+        sc(wsCC,r,8,sStr,b,CL.green,false,'center');
+      });
+      wsCC.addRow([]); backBtn(wsCC,wsCC.rowCount+1);
+
+      /* ══════════════════ BACKLOG ══════════════════ */
+      var wsBL = wb.addWorksheet('Backlog',{properties:{tabColor:{argb:ab(CL.prime)}}});
+      wsBL.columns=[{width:4},{width:12},{width:6},{width:12},{width:22},{width:14},{width:12},{width:22},{width:14}];
+      wsBL.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsBL,1,'Backlog — Lista de TSKs em Aberto',9);
+      infoRow(wsBL,2,fStr,9);
+      hdrRow(wsBL,3,['','OS','P.','Contrato','Status SLA','Região','Cidade','Fila Atual','Criação']);
+      var blR=4;
+      filtered.forEach(function(c){
+        ((ST[c.id].cls||{}).backlog||[]).slice().sort(function(a,b2){
+          var pa=PO[up(a.prioridade)]||99, pb2=PO[up(b2.prioridade)]||99;
+          if(pa!==pb2) return pa-pb2;
+          return (a.regiao||'').localeCompare(b2.regiao||'','pt-BR');
+        }).forEach(function(t,ti){
+          var b9=rowbg(ti);
+          wsBL.getRow(blR).height=15; wsBL.getCell(blR,1).fill=fl(b9);
+          sc(wsBL,blR,2,t.osNumero||'—',b9,CL.fg,true);
+          sc(wsBL,blR,3,t.prioridade||'—',b9,PCOL[up(t.prioridade)]||CL.muted,true,'center');
+          sc(wsBL,blR,4,c.name,b9,chex(c));
+          sc(wsBL,blR,5,t.statusSla||'—',b9,t.statusSla==='FORA DO SLA'?CL.red:t.statusSla==='PREDITIVA'?CL.yel:CL.muted);
+          sc(wsBL,blR,6,t.regiao||'—',b9,CL.fg);
+          sc(wsBL,blR,7,t.cidade||'—',b9,CL.muted);
+          sc(wsBL,blR,8,t.filaAtual||'—',b9,CL.muted);
+          sc(wsBL,blR,9,t.dataCriacaoAS||t.dataCriacao||'—',b9,CL.muted,false,'center');
+          blR++;
+        });
+      });
+      backBtn(wsBL,blR);
+
+      /* ══════════════════ INCIDENTES ══════════════════ */
+      var wsI = wb.addWorksheet('Incidentes',{properties:{tabColor:{argb:ab(CL.red)}}});
+      wsI.columns=[{width:4},{width:12},{width:14},{width:12},{width:10},{width:16},{width:12},{width:16},{width:24}];
+      wsI.views=[{state:'frozen',ySplit:3}];
+      titleRow(wsI,1,'Incidentes Ativos — Sites Fora',9);
+      infoRow(wsI,2,fStr,9);
+      hdrRow(wsI,3,['','Contrato','Site','END_ID','Duração','Região','TSK','Causa','Detalhe']);
+      var iR=4, nowI=Date.now();
+      filtered.forEach(function(c){
+        var incsI=(ST[c.id].incs||[]).filter(function(i){return up(i.statusTrat||'ATIVO')!=='RESOLVIDO';});
+        incsI.sort(function(a,b2){ var ta=safeDate(a.horarioDt),tb2=safeDate(b2.horarioDt); return (ta?ta.getTime():9e15)-(tb2?tb2.getTime():9e15); });
+        incsI.forEach(function(inc,ii){
+          var bI=rowbg(ii), hDt=safeDate(inc.horarioDt);
+          var durH=hDt?Math.floor((nowI-hDt.getTime())/3600000):0;
+          var dur=durH<24?durH+'h':(durH/24).toFixed(1)+'d';
+          var tskI=tskAbertaDe(ST[c.id].cls,inc.enderecoId);
+          wsI.getRow(iR).height=15; wsI.getCell(iR,1).fill=fl(bI);
+          sc(wsI,iR,2,c.name,bI,chex(c),true);
+          sc(wsI,iR,3,inc.site||'—',bI,CL.fg,true);
+          sc(wsI,iR,4,inc.enderecoId||'—',bI,CL.muted);
+          sc(wsI,iR,5,dur,bI,CL.red,true,'center');
+          sc(wsI,iR,6,c.region(inc)||'—',bI,CL.muted);
+          sc(wsI,iR,7,tskI?(tskI.osNumero||'—'):'SEM TSK',bI,tskI?CL.yel:CL.red,!tskI);
+          sc(wsI,iR,8,inc.causa||'—',bI,CL.muted);
+          sc(wsI,iR,9,(inc.detalhe||'').toString().trim().slice(0,100),bI,CL.muted);
+          iR++;
+        });
+      });
+      backBtn(wsI,iR);
+
+      /* ══════════════════ DOWNLOAD ══════════════════ */
+      var buffer = await wb.xlsx.writeBuffer();
+      var blob = new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href=url; a.download='devGERAL_'+(contractFilter||'todos')+'_'+now.toISOString().slice(0,10)+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    } catch(e) {
+      console.error('XLSX export error:', e);
+      alert('Erro ao gerar Excel: '+(e.message||String(e)));
+    } finally {
+      if(btn) { btn.innerHTML=bHtml; btn.disabled=false; }
+    }
   }
 
   window.switchTab          = switchTab;
