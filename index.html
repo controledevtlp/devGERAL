@@ -361,6 +361,9 @@
   <button id="btn-op" class="g-tab-btn" onclick="switchTab('op')">
     <span class="g-tab-dot"></span>Operacional
   </button>
+  <button id="btn-ret" class="g-tab-btn" onclick="switchTab('ret')">
+    <span class="g-tab-dot"></span>Controle de Retorno
+  </button>
   <button id="btn-prod" class="g-tab-btn" onclick="switchTab('prod')">
     <span class="g-tab-dot"></span>Produtividade
   </button>
@@ -430,6 +433,29 @@
   <div>
     <div class="g-sec"><span class="g-sec-dot"></span>Sites Fora — Incidentes Ativos por Região</div>
     <div class="g-3col" id="sitesForaDrillRow"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- TAB — CONTROLE DE RETORNO (o que foi suspenso/tramitado e voltou — ou deveria voltar — para a fila) -->
+<div id="tab-ret" class="g-tab-pane">
+<div class="g-main">
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Controle de Retorno — por contrato (suspensões e tramitações que voltam para a fila)</div>
+    <div class="g-filter-bar" id="retFilterBar"></div>
+    <div class="g-3col" id="retCardsRow"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Atenção agora — retorno vencido, ainda fora da fila (mais atrasadas primeiro)</div>
+    <div class="g-card" id="retVencBox"></div>
+  </div>
+
+  <div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Retornaram antes do planejado (mais recentes primeiro)</div>
+    <div class="g-card" id="retAntBox"></div>
   </div>
 
 </div>
@@ -1114,7 +1140,8 @@
         var cls   = classify(tasks);
         ST[c.id]={ loading:false, kpis:computeKpis(cls,incs,c.region,c.isCci), savedAt:res.savedAt||null, error:null, gs:res.gs||null,
                    tasks:tasks, incs:incs, cls:cls,
-                   prodHistory:(d.prodHistory&&Object.keys(d.prodHistory).length)?d.prodHistory:null };
+                   prodHistory:(d.prodHistory&&Object.keys(d.prodHistory).length)?d.prodHistory:null,
+                   retRaw:Array.isArray(d.retorno)?d.retorno:null, retApel:d.retornoApelidos||null };
         render();
       })
       .catch(function(err){
@@ -1161,6 +1188,7 @@
     if(tab==='exec')      { renderDonuts(); renderCampoCci(); }
     else if(tab==='sla')  { renderSlaPrioridade(); }
     else if(tab==='op')   { renderAging(); renderSitesForaDrill(); }
+    else if(tab==='ret')  { renderRetorno(); }
     else if(tab==='prod') { renderProdutividade(); }
     else if(tab==='upd')  { renderAtualizacoes(); }
   }
@@ -2196,6 +2224,171 @@
     openGModal('Detalhe — '+c.name+' OS '+osNumero, html);
   }
 
+  /* ── CONTROLE DE RETORNO ─────────────────────────────────────────
+     Versão enxuta da página "Controle de Retorno" do painel de cada contrato. Os episódios (suspensão/tramitação → volta para a fila) são
+     calculados no painel autenticado, a partir do histórico de linhas das TSKs, e publicados no snapshot (campo "retorno" — formato de
+     TRJ.retorno.compactar). Aqui só se recalcula o que depende da hora de agora (tempo parado e retorno vencido).
+     Os nomes acompanham o filtro de tipo: só suspensões, só tramitações ou as duas juntas. */
+  var RET_CL = {
+    ANTECIPADO:   { rot:'Retornou ANTES do planejado', cor:'#e74c3c' },
+    SEM_PREVISAO: { rot:'Retornou sem previsão',       cor:'#f39c12' },
+    NO_PRAZO:     { rot:'Retornou no prazo',           cor:'#2ecc71' }
+  };
+  var RET_VOC = {
+    TODOS:      { agora:'Fora da fila agora', segue:'segue fora da fila', tempo:'Tempo médio fora da fila', em:'Fora da fila há', plural:'suspensões e tramitações' },
+    SUSPENSAO:  { agora:'Suspensas agora',    segue:'segue suspensa',     tempo:'Tempo médio suspensa',    em:'Suspensa há',     plural:'suspensões' },
+    TRAMITACAO: { agora:'Tramitadas agora',   segue:'segue tramitada',    tempo:'Tempo médio tramitada',   em:'Tramitada há',    plural:'tramitações' }
+  };
+  var retTipo = 'TODOS', retPeriodo = 'tudo', retCache = null;
+
+  function retDur(min){
+    if(min==null) return '—';
+    var a = Math.abs(Math.round(min)); if(a<60) return a+'min';
+    var hh = Math.floor(a/60), mm = a%60; if(hh<48) return hh+'h'+('0'+mm).slice(-2)+'min';
+    return Math.floor(hh/24)+'d'+(hh%24)+'h';
+  }
+  function retExpandir(arr){
+    var now = Date.now();
+    return (arr||[]).map(function(x){
+      var ini = x.a?new Date(x.a):null, prev = x.v?new Date(x.v):null, ret = x.b?new Date(x.b):null;
+      return { os:x.o, site:x.s||'', regiao:x.r||'', prio:x.p||'—', tipo:x.t==='S'?'SUSPENSAO':'TRAMITACAO', inferida:!!x.i, motivo:x.m||'', quem:x.q||'', retornoPor:x.rp||'',
+        inicio:ini, previsto:prev, retorno:ret, classe:x.k, deltaMin:x.d==null?null:x.d,
+        suspensaMin: ini ? Math.round(((ret?ret.getTime():now)-ini.getTime())/60000) : null,
+        vencido: x.k==='SUSPENSA' && !!prev && prev.getTime()<now };
+    });
+  }
+  function retFiltra(evs){
+    var now = new Date(), hoje = localDay(now);
+    return evs.filter(function(e){
+      if(retTipo!=='TODOS' && e.tipo!==retTipo) return false;
+      if(retPeriodo==='tudo') return true;
+      var d = e.retorno||e.inicio; if(!d) return true;
+      if(retPeriodo==='hoje') return localDay(d)===hoje;
+      var h = (now-d)/36e5; return retPeriodo==='24h' ? h<=24 : h<=168;
+    });
+  }
+  function retMotivo(c, e){
+    var ap = ST[c.id].retApel || {}, v = ap[(e.tipo==='SUSPENSAO'?'motivo':'tram')+':'+e.motivo];
+    return v || e.motivo || '—';
+  }
+  /* números de um contrato (null = ainda sem publicação com o retorno) */
+  function retCalc(c){
+    var s = ST[c.id]; if(!s || s.error || !s.retRaw) return null;
+    var ev = retFiltra(retExpandir(s.retRaw));
+    function por(k){ return ev.filter(function(e){ return e.classe===k; }); }
+    var fora = por('SUSPENSA'), ret = ev.filter(function(e){ return e.retorno; }), cT = ret.filter(function(e){ return e.suspensaMin!=null; });
+    var ant = por('ANTECIPADO'), nop = por('NO_PRAZO');
+    return { ev:ev, fora:fora, venc:fora.filter(function(e){ return e.vencido; }), ant:ant, semp:por('SEM_PREVISAO'), nop:nop, ret:ret,
+      medMin: cT.length ? Math.round(cT.reduce(function(a,e){ return a+e.suspensaMin; },0)/cT.length) : null, comAw: ant.length+nop.length };
+  }
+
+  function setRetTipo(v){ retTipo = v; renderRetorno(); }
+  function setRetPeriodo(v){ retPeriodo = v; renderRetorno(); }
+
+  function renderRetorno(){
+    var bar = document.getElementById('retFilterBar'); if(!bar) return;
+    var V = RET_VOC[retTipo];
+    function chips(lista, atual, fn){
+      return lista.map(function(o){
+        var on = atual===o[0];
+        var st = on ? 'background:#ff8c00;border-color:#ff8c00;color:#111;font-weight:800;' : 'border-color:rgba(255,140,0,.35);color:#ff8c00;';
+        return '<button class="g-filter-btn" style="'+st+'" onclick="'+fn+'(\''+o[0]+'\')">'+o[1]+'</button>';
+      }).join('');
+    }
+    bar.innerHTML = '<span class="g-filter-lbl">Tipo:</span>' + chips([['TODOS','Suspensões + tramitações'],['SUSPENSAO','Só suspensões'],['TRAMITACAO','Só tramitações']], retTipo, 'setRetTipo') +
+      '<span class="g-filter-lbl" style="margin-left:14px">Período:</span>' + chips([['hoje','Hoje'],['24h','24 h'],['7d','7 dias'],['tudo','Todo o período']], retPeriodo, 'setRetPeriodo');
+
+    retCache = { porContrato:{}, venc:[], ant:[] };
+    var cards = CONTRACTS.map(function(c){
+      var s = ST[c.id], K = retCalc(c);
+      var cab = '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span><span style="color:'+c.color+'">'+c.name+'</span><span style="font-weight:600;letter-spacing:.5px;text-transform:none">· '+c.label+'</span></div>';
+      if(s.loading) return '<div class="g-card">'+cab+'<div class="g-empty">Carregando…</div></div>';
+      if(s.error)   return '<div class="g-card">'+cab+'<div class="g-err">Contrato offline</div></div>';
+      if(!K)        return '<div class="g-card">'+cab+'<div class="g-empty">O Controle de Retorno deste contrato ainda não foi publicado.<br>Abra o Dashboard no painel principal (com os arquivos de atividades importados) para publicar.</div></div>';
+      retCache.porContrato[c.id] = K;
+      K.venc.forEach(function(e){ retCache.venc.push({ c:c, e:e }); });
+      K.ant.forEach(function(e){ retCache.ant.push({ c:c, e:e }); });
+      function kpi(lbl, val, cor, chave){
+        return '<div class="g-kpi" style="cursor:pointer" onclick="openRetDrill(\''+c.id+'\',\''+chave+'\')" title="Ver as TSKs"><div class="g-kpi-val" style="color:'+cor+'">'+val+'</div><div class="g-kpi-lbl">'+lbl+'</div></div>';
+      }
+      var tot = K.ant.length + K.semp.length + K.nop.length;
+      function seg(n, k){ return n ? '<div class="g-camp-seg" style="width:'+(n/tot*100)+'%;background:'+RET_CL[k].cor+';color:#111" title="'+RET_CL[k].rot+': '+n+'">'+n+'</div>' : ''; }
+      var barra = tot ? '<div class="g-camp-bar-row" style="margin-top:14px">'+seg(K.ant.length,'ANTECIPADO')+seg(K.semp.length,'SEM_PREVISAO')+seg(K.nop.length,'NO_PRAZO')+'</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)">'+['ANTECIPADO','SEM_PREVISAO','NO_PRAZO'].map(function(k){ return '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+RET_CL[k].cor+';margin-right:4px"></span>'+RET_CL[k].rot.replace('Retornou ','')+'</span>'; }).join('')+'</div>'
+        : '<div class="g-empty" style="padding:14px 0">Nenhum retorno no período.</div>';
+      var pct = K.comAw ? '<div style="font-size:11px;color:var(--muted);margin-top:8px"><b style="color:'+(K.ant.length/K.comAw>=.5?'#e74c3c':(K.ant.length/K.comAw>=.25?'#f39c12':'#2ecc71'))+'">'+Math.round(K.ant.length/K.comAw*100)+'%</b> dos retornos com data prevista voltaram antes ('+K.ant.length+' de '+K.comAw+')</div>' : '';
+      return '<div class="g-card">'+cab+
+        '<div class="g-kpi-row" style="margin-top:0">'+
+          kpi(V.agora, fmtN(K.fora.length), '#3498db', 'agora')+
+          kpi('Retorno vencido', fmtN(K.venc.length), '#e74c3c', 'venc')+
+          kpi('Antes do planejado', fmtN(K.ant.length), '#e74c3c', 'ant')+
+          kpi('Sem previsão', fmtN(K.semp.length), '#f39c12', 'semp')+
+          kpi('No prazo', fmtN(K.nop.length), '#2ecc71', 'nop')+
+          kpi(V.tempo.replace('Tempo médio ','Tempo médio<br>'), K.medMin==null?'—':retDur(K.medMin), '#ff8c00', 'ret')+
+        '</div>'+barra+pct+
+        '<div style="font-size:10px;color:var(--muted);margin-top:8px">Publicado em '+fmtDtFull(s.savedAt)+'</div></div>';
+    });
+    document.getElementById('retCardsRow').innerHTML = cards.join('');
+
+    /* listas de atenção (todos os contratos juntos) */
+    retCache.venc.sort(function(a,b){ return a.e.previsto - b.e.previsto; });
+    retCache.ant.sort(function(a,b){ return b.e.retorno - a.e.retorno; });
+    document.getElementById('retVencBox').innerHTML = retListaHtml('venc', 12);
+    document.getElementById('retAntBox').innerHTML = retListaHtml('ant', 12);
+  }
+
+  function retTag(c){ return '<span style="font-size:10px;font-weight:800;color:'+c.color+'">'+c.name+'</span>'; }
+  function retPrio(p){ return '<span style="font-weight:800;color:'+(PRIO_COR[p]||'var(--fg)')+'">'+escHtml(p||'—')+'</span>'; }
+  function retLinhas(itens, modo, comTipo){
+    var V = RET_VOC[retTipo];
+    var thead = '<tr><th>Contrato</th>'+(comTipo?'<th>Tipo</th>':'')+['TSK','Site','Prio','Região','Motivo','Operador'].concat(modo==='venc' ? ['Previsto (AW)','Venceu há'] : (modo==='ant' ? ['Previsto (AW)','Retornou em','Antecipou'] : [V.em.replace(' há',' em'),'Previsto (AW)','Retornou em','Situação'])).map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr>';
+    var body = itens.map(function(it){
+      var c = it.c, e = it.e;
+      var tipoTd = comTipo ? '<td><span class="g-badge-s" style="color:'+(e.tipo==='SUSPENSAO'?'#b07bd0':'#3498db')+';background:rgba(255,255,255,.06)">'+(e.tipo==='SUSPENSAO'?'SUSPENSÃO':'TRAMITAÇÃO')+'</span></td>' : '';
+      var base = '<td>'+retTag(c)+'</td>'+tipoTd+'<td style="font-weight:700;white-space:nowrap">'+escHtml(e.os)+'</td><td>'+escHtml(e.site||'—')+'</td><td>'+retPrio(e.prio)+'</td><td>'+escHtml(e.regiao||'—')+'</td>'+
+        '<td class="det" title="'+escHtml(e.motivo)+'">'+escHtml(retMotivo(c,e))+'</td><td>'+escHtml(e.inferida?'(início não identificado)':e.quem)+'</td>';
+      var fim;
+      if(modo==='venc') fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="color:#e74c3c;font-weight:800">'+retDur((Date.now()-e.previsto.getTime())/60000)+'</td>';
+      else if(modo==='ant') fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="white-space:nowrap">'+fmtDt(e.retorno)+'</td><td style="color:#e74c3c;font-weight:800">'+retDur(e.deltaMin)+'</td>';
+      else {
+        var cl = RET_CL[e.classe], sit = e.classe==='SUSPENSA' ? badgeS(e.vencido?'RETORNO VENCIDO':V.segue.replace('segue ','Ainda '), e.vencido?'#e74c3c':'#3498db', e.vencido?'rgba(231,76,60,.16)':'rgba(52,152,219,.16)')
+          : badgeS(e.classe==='ANTECIPADO' ? 'ANTECIPADO '+retDur(e.deltaMin) : (cl?cl.rot:e.classe), cl?cl.cor:'#8a8a93', 'rgba(255,255,255,.06)');
+        fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.inicio)+'</td><td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="white-space:nowrap">'+fmtDt(e.retorno)+'</td><td>'+sit+'</td>';
+      }
+      return '<tr>'+base+fim+'</tr>';
+    }).join('');
+    return '<thead>'+thead+'</thead><tbody>'+body+'</tbody>';
+  }
+  function retListaHtml(modo, lim){
+    var itens = retCache[modo];
+    var V = RET_VOC[retTipo];
+    if(!itens.length) return '<div class="g-empty">'+(modo==='venc' ? 'Nenhuma TSK com retorno vencido ('+V.segue+'). 👏' : 'Nenhum retorno antes do planejado no período.')+'</div>';
+    var mostra = itens.slice(0, lim);
+    return '<div class="g-dtbl-wrap" style="max-height:none"><table class="g-dtbl">'+retLinhas(mostra, modo, retTipo==='TODOS')+'</table></div>'+
+      (itens.length>lim ? '<div style="text-align:center;padding:10px"><button class="g-btn" onclick="openRetDrill(\'*\',\''+modo+'\')">Ver todos ('+fmtN(itens.length)+')</button></div>'
+                        : '<div style="text-align:right;font-size:10px;color:var(--muted);padding-top:6px">'+itens.length+' no total</div>');
+  }
+  /* drill: id de contrato ('*' = todos os contratos) + qual lista */
+  function openRetDrill(id, chave){
+    if(!retCache) return;
+    var V = RET_VOC[retTipo], itens = [], titulo = '';
+    var nomes = { agora:V.agora, venc:'Retorno vencido ('+V.segue+')', ant:'Retornaram ANTES do planejado', semp:'Retornaram sem previsão', nop:'Retornaram no prazo', ret:'Todos os retornos do filtro' };
+    CONTRACTS.forEach(function(c){
+      if(id!=='*' && c.id!==id) return;
+      var K = retCache.porContrato[c.id]; if(!K) return;
+      var lista = chave==='agora' ? K.fora : chave==='venc' ? K.venc : chave==='ant' ? K.ant : chave==='semp' ? K.semp : chave==='nop' ? K.nop : K.ret;
+      lista.forEach(function(e){ itens.push({ c:c, e:e }); });
+    });
+    var modo = chave==='venc' ? 'venc' : (chave==='ant' ? 'ant' : 'geral');
+    if(modo==='venc') itens.sort(function(a,b){ return a.e.previsto-b.e.previsto; });
+    else if(chave==='agora') itens.sort(function(a,b){ return (b.e.vencido-a.e.vencido) || ((a.e.previsto?a.e.previsto.getTime():9e15)-(b.e.previsto?b.e.previsto.getTime():9e15)); });
+    else itens.sort(function(a,b){ return ((b.e.retorno||b.e.inicio||0)-(a.e.retorno||a.e.inicio||0)); });
+    var lim = 600, c1 = id!=='*' ? CONTRACTS.filter(function(c){ return c.id===id; })[0] : null;
+    titulo = (c1 ? c1.name+' · ' : '')+nomes[chave]+' ('+fmtN(itens.length)+')';
+    openGModal(titulo, itens.length ? '<div class="g-dtbl-wrap"><table class="g-dtbl">'+retLinhas(itens.slice(0,lim), modo, retTipo==='TODOS')+'</table></div>'+
+      (itens.length>lim ? '<div style="text-align:center;padding:10px;font-size:11px;color:var(--muted)">Exibindo '+lim+' de '+fmtN(itens.length)+' registros</div>' : '') : '<div class="g-empty">Sem registros</div>');
+  }
+
   /* ── MODAL ──────────────────────────────────────────────────── */
   var _gModalCopyFn = null;
   function openGModal(title, bodyHtml, opts) {
@@ -2635,132 +2828,167 @@
       var wb = new ExcelJS.Workbook();
       wb.creator = 'devGERAL'; wb.created = now;
 
-      /* ── Paleta ── */
+      /* ── Paleta profissional (tema claro) ── */
       var CL = {
-        hdr:'1A1C2E', hdr2:'252840', rowA:'111122', rowB:'181830',
-        fg:'F0F0F8', muted:'888899', prime:'FF8C00',
-        green:'2ECC71', red:'E74C3C', yel:'F39C12', cci:'A78BFA'
+        navy:'1F3864', blue:'2E5FA3', infoB:'E8F0FE',
+        rowA:'FFFFFF', rowB:'F2F6FC', totBg:'E2EFDA', divBg:'EEF2F8',
+        fg:'212121',   muted:'5F6368', bdr:'D0D7E3',
+        red:'C00000',  org:'C05500',  yel:'A67000', grn:'1A7A40', cci:'5B3F8C'
       };
-      var PCOL = { P1:CL.red, P2:CL.yel, P3:CL.prime, P4:CL.muted, P5:CL.muted };
-
+      var PCOL = { P1:CL.red, P2:CL.org, P3:CL.yel, P4:CL.muted, P5:CL.muted };
+      function textHex(c){
+        if(c.id==='trj') return 'B85C00';
+        if(c.id==='tmg') return '1565C0';
+        if(c.id==='tne') return '1A7A40';
+        return CL.fg;
+      }
       function ab(h){ return 'FF'+h.replace('#','').toUpperCase(); }
       function fl(h){ return {type:'pattern',pattern:'solid',fgColor:{argb:ab(h)}}; }
       function fn(h,b,s){ var f={}; if(h)f.color={argb:ab(h)}; if(b)f.bold=true; if(s)f.size=s; return f; }
-      function sc(ws,r,c,v,bg,fg,bold,alignH){
-        var cell=ws.getCell(r,c); cell.value=v;
-        if(bg) cell.fill=fl(bg);
+      function mkBdr(){ var s={style:'thin',color:{argb:ab(CL.bdr)}}; return {top:s,left:s,bottom:s,right:s}; }
+      function dc(ws,r,col,v,bg,fg,bold,aln){
+        var cell=ws.getCell(r,col); cell.value=v;
+        cell.fill=fl(bg||CL.rowA);
         if(fg||bold) cell.font=fn(fg,bold);
-        cell.alignment=alignH?{horizontal:alignH,vertical:'middle'}:{vertical:'middle',indent:1};
+        cell.alignment=aln?{horizontal:aln,vertical:'middle'}:{vertical:'middle',indent:1};
+        cell.border=mkBdr();
         return cell;
       }
-      function titleRow(ws,r,txt,cols,bgH,fgH){
-        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=30;
-        sc(ws,r,1,txt,bgH||CL.hdr,fgH||CL.prime,true,'center');
+      function titleRow(ws,r,txt,cols){
+        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=28;
+        var cell=ws.getCell(r,1); cell.value=txt;
+        cell.fill=fl(CL.navy); cell.font=fn('FFFFFF',true,13);
+        cell.alignment={horizontal:'left',vertical:'middle',indent:2};
       }
       function infoRow(ws,r,txt,cols){
         ws.mergeCells(r,1,r,cols); ws.getRow(r).height=14;
-        sc(ws,r,1,txt,CL.hdr,CL.muted,false,'left');
+        var cell=ws.getCell(r,1); cell.value=txt;
+        cell.fill=fl(CL.infoB); cell.font=fn(CL.muted,false,8);
+        cell.alignment={horizontal:'left',vertical:'middle',indent:2};
+        cell.border={bottom:{style:'thin',color:{argb:ab(CL.bdr)}}};
       }
-      function hdrRow(ws,r,headers,bgH){
+      function hdrRow(ws,r,headers){
         ws.getRow(r).height=18;
         headers.forEach(function(h,ci){
           var cell=ws.getCell(r,ci+1); cell.value=h;
-          cell.fill=fl(bgH||CL.hdr2); cell.font=fn('FFFFFF',true,9);
+          cell.fill=fl(CL.blue); cell.font=fn('FFFFFF',true,9);
           cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};
-          cell.border={bottom:{style:'medium',color:{argb:ab(CL.prime)}}};
+          var nb={style:'medium',color:{argb:ab(CL.navy)}}, tb={style:'thin',color:{argb:ab('4472C4')}};
+          cell.border={top:nb,bottom:nb,left:tb,right:tb};
         });
       }
-      function rowbg(i){ return i%2===0?CL.rowA:CL.rowB; }
-      function backBtn(ws,r){
-        ws.getRow(r).height=18;
-        var cell=ws.getCell(r,1);
-        cell.value={text:'← Voltar ao Menu Principal',hyperlink:'#Menu!A1'};
-        cell.font=fn(CL.prime,true); cell.fill=fl(CL.hdr);
-        cell.alignment={vertical:'middle',indent:1};
+      function totRow(ws,r,specs,ncols){
+        ws.getRow(r).height=20;
+        var n=typeof ncols==='number'?ncols:specs.length;
+        for(var _t=1;_t<=n;_t++){
+          var sp=_t<=specs.length?specs[_t-1]:null;
+          var v=sp&&typeof sp==='object'&&'v' in sp?sp.v:(sp!=null?sp:null);
+          var fg2=sp&&typeof sp==='object'&&sp.fg?sp.fg:CL.grn;
+          var aln=sp&&typeof sp==='object'&&sp.a?sp.a:'left';
+          var cell=ws.getCell(r,_t);
+          cell.value=v; cell.fill=fl(CL.totBg);
+          cell.font=fn(fg2,true,9);
+          cell.alignment={horizontal:aln,vertical:'middle',indent:aln==='left'?1:0};
+          cell.border=mkBdr();
+        }
       }
+      function rowbg(i){ return i%2===0?CL.rowA:CL.rowB; }
       function contractHdr(ws,r,c,txt,cols){
-        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=24;
+        ws.mergeCells(r,1,r,cols); ws.getRow(r).height=22;
         var cell=ws.getCell(r,1); cell.value=txt;
         cell.fill=fl(c.color.replace('#','').toUpperCase());
-        cell.font=fn('111111',true,11); cell.alignment={horizontal:'left',vertical:'middle',indent:1};
+        cell.font=fn('FFFFFF',true,10);
+        cell.alignment={horizontal:'left',vertical:'middle',indent:2};
       }
-      function chex(c){ return c.color.replace('#','').toUpperCase(); }
+      function backBtn(ws,r,cols){
+        ws.getRow(r).height=16;
+        var cell=ws.getCell(r,1);
+        cell.value={text:'← Voltar ao Menu',hyperlink:'#Menu!A1'};
+        cell.font={color:{argb:ab(CL.blue)},bold:true,underline:true,size:9};
+        cell.fill=fl(CL.infoB);
+        cell.alignment={vertical:'middle',indent:2};
+        cell.border={top:{style:'thin',color:{argb:ab(CL.bdr)}}};
+      }
+      function padDiv(ws,r,cols){ ws.getRow(r).height=8; for(var _d=1;_d<=cols;_d++) ws.getCell(r,_d).fill=fl(CL.divBg); }
 
-      var fStr = 'Extraído: '+now.toLocaleString('pt-BR')+'  |  '+
-        (contractFilter?(filtered[0]||{}).name:'TRJ · TMG · TNE')+
-        (agingPrio.length>0?'  |  Aging P: '+agingPrio.join('+'):'');
+      var baseFStr = 'Extraído: '+now.toLocaleString('pt-BR')+'  |  Contratos: '+
+        (contractFilter?(filtered[0]||{}).name:'TRJ · TMG · TNE');
       var PO = {P1:1,P2:2,P3:3,P4:4,P5:5};
 
       /* ══════════════════ MENU ══════════════════ */
-      var wsM = wb.addWorksheet('Menu',{properties:{tabColor:{argb:ab(CL.prime)}}});
-      wsM.columns=[{width:5},{width:30},{width:55},{width:16}];
-      wsM.views=[{state:'frozen',ySplit:3}];
-      titleRow(wsM,1,'devGERAL — Dashboard TRJ · TMG · TNE',4);
-      infoRow(wsM,2,fStr,4);
-      wsM.getRow(3).height=8;
-      [1,2,3,4].forEach(function(ci){ wsM.getCell(3,ci).fill=fl(CL.hdr); });
-      hdrRow(wsM,4,['#','Aba','Descrição','Ir para'],CL.hdr2);
+      var wsM = wb.addWorksheet('Menu',{properties:{tabColor:{argb:ab(CL.navy)}}});
+      wsM.columns=[{width:6},{width:30},{width:55},{width:14}];
+      wsM.views=[{state:'frozen',ySplit:4}];
+      titleRow(wsM,1,'devGERAL — Dashboard Comparativo TRJ · TMG · TNE',4);
+      infoRow(wsM,2,baseFStr,4);
+      padDiv(wsM,3,4);
+      hdrRow(wsM,4,['#','Aba','Descrição','Ir para']);
       [
-        {s:'KPIs',         d:'Indicadores: sites fora, backlog, SLA, GMGs por contrato',   fc:CL.green},
-        {s:'Aging',        d:'Backlog por faixa de tempo em aberto + drilldown completo',   fc:CL.yel},
-        {s:'Sites Fora',   d:'Incidentes ativos por região (volumetria filtrada) + lista',  fc:CL.red},
-        {s:'Produtividade',d:'Encerramentos diários por contrato nos últimos 30 dias',      fc:CL.green},
-        {s:'Campo x CCI',  d:'Produção Campo × CCI/CCO com SLA por contrato',               fc:CL.cci},
-        {s:'Backlog',      d:'Lista de TSKs em aberto ordenada por prioridade e região',    fc:CL.prime},
-        {s:'Incidentes',   d:'Incidentes ativos com TSK vinculada, duração e causa',        fc:CL.red}
+        {s:'KPIs',         d:'Indicadores: sites fora, backlog, SLA, GMGs por contrato'},
+        {s:'Aging',        d:'Backlog por faixa de tempo em aberto + drilldown detalhado'},
+        {s:'Sites Fora',   d:'Incidentes ativos por região com volumetria filtrada + lista'},
+        {s:'Produtividade',d:'Encerramentos diários por contrato nos últimos 30 dias'},
+        {s:'Campo x CCI',  d:'Produção Campo × CCI/CCO com detalhamento de SLA'},
+        {s:'Backlog',      d:'Lista de TSKs em aberto ordenada por prioridade e região'},
+        {s:'Incidentes',   d:'Incidentes ativos com TSK vinculada, duração e causa'}
       ].forEach(function(item,i){
         var r=5+i, b=rowbg(i);
         wsM.getRow(r).height=22;
-        sc(wsM,r,1,i+1,b,CL.muted,true,'center');
-        sc(wsM,r,2,item.s,b,item.fc,true);
-        sc(wsM,r,3,item.d,b,CL.muted);
-        var lc=wsM.getCell(r,4);
+        dc(wsM,r,1,i+1,b,CL.muted,false,'center');
+        dc(wsM,r,2,item.s,b,CL.navy,true);
+        dc(wsM,r,3,item.d,b,CL.muted);
+        var lc=wsM.getCell(r,4); lc.fill=fl(b);
         lc.value={text:'→ Abrir',hyperlink:'#'+item.s+'!A1'};
-        lc.font=fn(CL.prime,true); lc.fill=fl(b); lc.alignment={horizontal:'center',vertical:'middle'};
+        lc.font={color:{argb:ab(CL.blue)},bold:true,underline:true,size:9};
+        lc.alignment={horizontal:'center',vertical:'middle'};
+        lc.border=mkBdr();
       });
 
       /* ══════════════════ KPIs ══════════════════ */
-      var wsK = wb.addWorksheet('KPIs',{properties:{tabColor:{argb:ab(CL.green)}}});
+      var wsK = wb.addWorksheet('KPIs',{properties:{tabColor:{argb:ab(CL.grn)}}});
       var kCols = 3+filtered.length;
-      wsK.columns=[{width:4},{width:26},{width:12}].concat(filtered.map(function(){return {width:14};}));
+      wsK.columns=[{width:4},{width:28},{width:12}].concat(filtered.map(function(){return {width:16};}));
       wsK.views=[{state:'frozen',ySplit:3}];
       titleRow(wsK,1,'KPIs — Indicadores Consolidados',kCols);
-      infoRow(wsK,2,fStr,kCols);
+      infoRow(wsK,2,baseFStr,kCols);
       hdrRow(wsK,3,['','Métrica','Total'].concat(filtered.map(function(c){return c.name;})));
       [
         {key:'sitesForaAtivos',lbl:'Sites Fora Ativos', fg:CL.red},
-        {key:'backlogTotal',   lbl:'Backlog Total',     fg:CL.yel},
+        {key:'backlogTotal',   lbl:'Backlog Total',     fg:CL.org},
         {key:'foraSla',        lbl:'Fora do SLA',       fg:CL.red},
         {key:'preditiva',      lbl:'Preditiva',         fg:CL.yel},
-        {key:'slaGeral',       lbl:'SLA Geral (%)',     fg:CL.green, pct:true},
+        {key:'slaGeral',       lbl:'SLA Geral (%)',     fg:CL.grn, pct:true},
         {key:'backlogIndef',   lbl:'Sem SLA Definido',  fg:CL.muted},
         {key:'gmgFila',        lbl:'GMGs na Fila',      fg:CL.red}
       ].forEach(function(d,i){
         var r=4+i, b=rowbg(i);
-        wsK.getRow(r).height=20; wsK.getCell(r,1).fill=fl(b);
-        sc(wsK,r,2,d.lbl,b,d.fg,true);
+        wsK.getRow(r).height=20;
+        dc(wsK,r,1,'',b,null,false,'center');
+        dc(wsK,r,2,d.lbl,b,CL.fg,true);
         var tot=d.pct?'—':filtered.reduce(function(s,c){return s+nn((ST[c.id].kpis||{})[d.key]);},0);
-        sc(wsK,r,3,tot,b,d.pct?CL.muted:CL.prime,true,'center');
+        dc(wsK,r,3,tot,b,d.pct?CL.muted:CL.navy,true,'center');
         filtered.forEach(function(c,ci){
           var v=nn((ST[c.id].kpis||{})[d.key]);
-          sc(wsK,r,4+ci,d.pct?v.toFixed(1)+'%':v,b,chex(c),false,'center');
+          dc(wsK,r,4+ci,d.pct?v.toFixed(1)+'%':v,b,d.fg,false,'center');
         });
       });
-      wsK.addRow([]); backBtn(wsK,wsK.rowCount+1);
+      var kBR=11; wsK.mergeCells(kBR,1,kBR,kCols); backBtn(wsK,kBR,kCols);
 
       /* ══════════════════ AGING ══════════════════ */
       var wsA = wb.addWorksheet('Aging',{properties:{tabColor:{argb:ab(CL.yel)}}});
       var aCols = 3+filtered.length;
-      wsA.columns=[{width:4},{width:16}].concat(filtered.map(function(){return {width:14};})).concat([{width:10}]);
+      wsA.columns=[{width:4},{width:22}].concat(filtered.map(function(){return {width:14};})).concat([{width:12}]);
       wsA.views=[{state:'frozen',ySplit:3}];
+      var agFStr=baseFStr+(agingPrio.length>0?'  |  Filtro: '+agingPrio.join('+'):'');
       titleRow(wsA,1,'Aging do Backlog — Distribuição por Faixa de Tempo',aCols);
-      infoRow(wsA,2,fStr+(agingPrio.length>0?'  |  P: '+agingPrio.join('+'):''),aCols);
-      hdrRow(wsA,3,['','Faixa'].concat(filtered.map(function(c){return c.name;})).concat(['Total']));
-      var agNow2=Date.now(), aRowStart=4;
+      infoRow(wsA,2,agFStr,aCols);
+      hdrRow(wsA,3,['','Faixa de Tempo'].concat(filtered.map(function(c){return c.name;})).concat(['Total']));
+      var agNow2=Date.now(), aRowStart=4, agColTots=filtered.map(function(){return 0;}), agGrandTot=0;
       AGING_BUCKETS.forEach(function(bkt,bi){
         var r=aRowStart+bi, b=rowbg(bi), rowTot=0;
-        wsA.getRow(r).height=20; wsA.getCell(r,1).fill=fl(b);
-        sc(wsA,r,2,bkt.label,b,CL.fg,true);
+        wsA.getRow(r).height=18;
+        dc(wsA,r,1,'',b,null,false,'center');
+        dc(wsA,r,2,bkt.label,b,CL.fg,false);
         filtered.forEach(function(c,ci){
           var cnt=0;
           ((ST[c.id].cls||{}).backlog||[]).forEach(function(t){
@@ -2769,18 +2997,24 @@
             var mins=Math.round((agNow2-dt.getTime())/60000);
             if(mins>=bkt.min&&mins<bkt.max) cnt++;
           });
-          sc(wsA,r,3+ci,cnt,b,chex(c),cnt>0,'center'); rowTot+=cnt;
+          dc(wsA,r,3+ci,cnt>0?cnt:0,b,cnt>0?CL.red:CL.muted,cnt>0,'center');
+          rowTot+=cnt; agColTots[ci]=(agColTots[ci]||0)+cnt;
         });
-        sc(wsA,r,3+filtered.length,rowTot,b,CL.prime,true,'center');
+        dc(wsA,r,3+filtered.length,rowTot>0?rowTot:0,b,rowTot>0?CL.navy:CL.muted,rowTot>0,'center');
+        agGrandTot+=rowTot;
       });
+      totRow(wsA,aRowStart+AGING_BUCKETS.length,
+        [{v:'',a:'center'},{v:'TOTAL',a:'left'}].concat(
+          agColTots.map(function(v){return {v:v,a:'center',fg:v>0?CL.navy:CL.muted};})).concat([{v:agGrandTot,a:'center',fg:CL.grn}]),
+        aCols);
       /* Drilldown */
-      var aDH=aRowStart+AGING_BUCKETS.length+1, dCols=Math.max(aCols,7);
-      wsA.getRow(aDH-1).height=10; wsA.getCell(aDH-1,1).fill=fl(CL.hdr);
+      var aDH=aRowStart+AGING_BUCKETS.length+2, dCols=Math.max(aCols,7);
+      padDiv(wsA,aDH-1,dCols);
       wsA.mergeCells(aDH,1,aDH,dCols); wsA.getRow(aDH).height=22;
       var dhCell=wsA.getCell(aDH,1);
-      dhCell.value='DRILLDOWN — TSKs em Backlog  (Prioridade → Região → Tempo em Aberto)';
-      dhCell.fill=fl(CL.hdr2); dhCell.font=fn(CL.prime,true,10);
-      dhCell.alignment={horizontal:'left',vertical:'middle',indent:1};
+      dhCell.value='Drilldown — TSKs em Backlog  (Prioridade → Região → Tempo em Aberto)';
+      dhCell.fill=fl(CL.navy); dhCell.font=fn('FFFFFF',true,9);
+      dhCell.alignment={horizontal:'left',vertical:'middle',indent:2};
       hdrRow(wsA,aDH+1,['','Contrato','OS','Prioridade','Região','Tempo em Aberto','Cidade']);
       var dR=aDH+2;
       filtered.forEach(function(c){
@@ -2800,24 +3034,25 @@
           var b2=rowbg(ti), dt=safeDate(t.dataCriacaoAS);
           var elH=dt?Math.floor((Date.now()-dt.getTime())/3600000):0;
           var el=elH<24?elH+'h':(elH/24).toFixed(1)+'d';
-          wsA.getRow(dR).height=15; wsA.getCell(dR,1).fill=fl(b2);
-          sc(wsA,dR,2,c.name,b2,chex(c),true,'center');
-          sc(wsA,dR,3,t.osNumero||'—',b2,CL.fg,true);
-          sc(wsA,dR,4,t.prioridade||'—',b2,PCOL[up(t.prioridade)]||CL.muted,true,'center');
-          sc(wsA,dR,5,t.regiao||'—',b2,CL.fg);
-          sc(wsA,dR,6,el,b2,CL.red,true,'center');
-          sc(wsA,dR,7,t.cidade||'—',b2,CL.muted);
+          wsA.getRow(dR).height=15;
+          dc(wsA,dR,1,'',b2,null,false,'center');
+          dc(wsA,dR,2,c.name,b2,textHex(c),true);
+          dc(wsA,dR,3,t.osNumero||'—',b2,CL.fg);
+          dc(wsA,dR,4,t.prioridade||'—',b2,PCOL[up(t.prioridade)]||CL.muted,true,'center');
+          dc(wsA,dR,5,t.regiao||'—',b2,CL.fg);
+          dc(wsA,dR,6,el,b2,CL.red,true,'center');
+          dc(wsA,dR,7,t.cidade||'—',b2,CL.muted);
           dR++;
         });
       });
-      wsA.addRow([]); backBtn(wsA,wsA.rowCount+1);
+      var aBtnR=dR+1; wsA.mergeCells(aBtnR,1,aBtnR,dCols); backBtn(wsA,aBtnR,dCols);
 
       /* ══════════════════ SITES FORA ══════════════════ */
       var wsSF = wb.addWorksheet('Sites Fora',{properties:{tabColor:{argb:ab(CL.red)}}});
-      wsSF.columns=[{width:4},{width:22},{width:10},{width:10},{width:10},{width:8},{width:18},{width:12},{width:24}];
+      wsSF.columns=[{width:4},{width:26},{width:10},{width:10},{width:10},{width:9},{width:20},{width:14},{width:28}];
       wsSF.views=[{state:'frozen',ySplit:2}];
       titleRow(wsSF,1,'Sites Fora — Incidentes Ativos por Região',9);
-      infoRow(wsSF,2,fStr,9);
+      infoRow(wsSF,2,baseFStr,9);
       var sfR=3;
       filtered.forEach(function(c){
         var selSf4=sfPrio[c.id];
@@ -2835,22 +3070,28 @@
         });
         var regs4=Object.keys(ibr4).sort(function(a,b2){return ibr4[b2].total-ibr4[a].total;});
         contractHdr(wsSF,sfR,c,c.name+' — '+(ST[c.id].label||'')+
-          (selSf4?'  |  Filtro P: '+selSf4:'  |  Todas as prioridades')+'  |  Total: '+incsA4.length+' incidentes',9); sfR++;
-        hdrRow(wsSF,sfR,['','Região','Total','Com TSK','Sem TSK','% c/TSK','','','']); sfR++;
-        regs4.forEach(function(reg4,ri){
-          var v4=ibr4[reg4], comPct4=v4.total>0?Math.round(v4.comTsk/v4.total*100):0, b4=rowbg(ri);
-          wsSF.getRow(sfR).height=18; wsSF.getCell(sfR,1).fill=fl(b4);
-          sc(wsSF,sfR,2,reg4,b4,chex(c),true);
-          sc(wsSF,sfR,3,v4.total,b4,CL.red,true,'center');
-          sc(wsSF,sfR,4,v4.comTsk,b4,CL.green,false,'center');
-          sc(wsSF,sfR,5,v4.semTsk,b4,CL.red,false,'center');
-          sc(wsSF,sfR,6,comPct4+'%',b4,comPct4>=70?CL.green:comPct4>=40?CL.yel:CL.red,true,'center');
-          for(var _c=7;_c<=9;_c++) wsSF.getCell(sfR,_c).fill=fl(b4);
+          (selSf4?'  ·  Prioridade: '+selSf4:'  ·  Todas as prioridades')+'  ·  '+incsA4.length+' incidentes ativos',9); sfR++;
+        if(!regs4.length){
+          wsSF.getRow(sfR).height=16;
+          for(var _c0=1;_c0<=9;_c0++) dc(wsSF,sfR,_c0,_c0===2?'✓ Nenhum incidente ativo':'',CL.rowA,_c0===2?CL.grn:null,_c0===2);
           sfR++;
-        });
-        if(!regs4.length){ wsSF.getRow(sfR).height=16; sc(wsSF,sfR,2,'✓ Nenhum incidente ativo',CL.rowA,CL.green); for(var _c2=1;_c2<=9;_c2++){if(_c2!==2)wsSF.getCell(sfR,_c2).fill=fl(CL.rowA);} sfR++; }
-        wsSF.getRow(sfR).height=6; for(var _cs=1;_cs<=9;_cs++) wsSF.getCell(sfR,_cs).fill=fl(CL.hdr); sfR++;
-        hdrRow(wsSF,sfR,['','Site','Horário','Duração','Região','TSK','P.','Causa','Detalhe']); sfR++;
+        } else {
+          hdrRow(wsSF,sfR,['','Região','Total','Com TSK','Sem TSK','% c/TSK','','','']); sfR++;
+          regs4.forEach(function(reg4,ri){
+            var v4=ibr4[reg4], comPct4=v4.total>0?Math.round(v4.comTsk/v4.total*100):0, b4=rowbg(ri);
+            wsSF.getRow(sfR).height=18;
+            dc(wsSF,sfR,1,'',b4,null,false,'center');
+            dc(wsSF,sfR,2,reg4,b4,CL.fg,true);
+            dc(wsSF,sfR,3,v4.total,b4,CL.red,true,'center');
+            dc(wsSF,sfR,4,v4.comTsk,b4,CL.grn,false,'center');
+            dc(wsSF,sfR,5,v4.semTsk,b4,v4.semTsk>0?CL.red:CL.muted,false,'center');
+            dc(wsSF,sfR,6,comPct4+'%',b4,comPct4>=70?CL.grn:comPct4>=40?CL.yel:CL.red,true,'center');
+            dc(wsSF,sfR,7,'',b4); dc(wsSF,sfR,8,'',b4); dc(wsSF,sfR,9,'',b4);
+            sfR++;
+          });
+        }
+        padDiv(wsSF,sfR,9); sfR++;
+        hdrRow(wsSF,sfR,['','Site / Endereço','Horário','Duração','Região','TSK','P.','Causa','Detalhe']); sfR++;
         var incsSort4=incsA4.slice().sort(function(a,b2){
           var ta=safeDate(a.horarioDt),tb2=safeDate(b2.horarioDt);
           return (ta?ta.getTime():9e15)-(tb2?tb2.getTime():9e15);
@@ -2861,64 +3102,61 @@
           var durH=hDt?Math.floor((nowSF-hDt.getTime())/3600000):0;
           var dur=durH<24?durH+'h':(durH/24).toFixed(1)+'d';
           var tsk5=tskAbertaDe(ST[c.id].cls,inc.enderecoId);
-          wsSF.getRow(sfR).height=15; wsSF.getCell(sfR,1).fill=fl(b5);
-          sc(wsSF,sfR,2,inc.site||inc.enderecoId||'—',b5,CL.fg,true);
-          sc(wsSF,sfR,3,inc.horario||fmtDt(inc.horarioDt)||'—',b5,CL.muted,false,'center');
-          sc(wsSF,sfR,4,dur,b5,CL.red,true,'center');
-          sc(wsSF,sfR,5,c.region(inc)||'—',b5,CL.muted);
-          sc(wsSF,sfR,6,tsk5?(tsk5.osNumero||'—'):'SEM TSK',b5,tsk5?CL.yel:CL.red,!tsk5);
-          sc(wsSF,sfR,7,tsk5?(tsk5.prioridade||'—'):'—',b5,tsk5?(PCOL[up(tsk5.prioridade)]||CL.muted):CL.muted,false,'center');
-          sc(wsSF,sfR,8,inc.causa||'—',b5,CL.muted);
-          sc(wsSF,sfR,9,(inc.detalhe||'').toString().trim().slice(0,100),b5,CL.muted);
+          wsSF.getRow(sfR).height=15;
+          dc(wsSF,sfR,1,'',b5,null,false,'center');
+          dc(wsSF,sfR,2,inc.site||inc.enderecoId||'—',b5,CL.fg,true);
+          dc(wsSF,sfR,3,inc.horario||fmtDt(inc.horarioDt)||'—',b5,CL.muted,false,'center');
+          dc(wsSF,sfR,4,dur,b5,CL.red,true,'center');
+          dc(wsSF,sfR,5,c.region(inc)||'—',b5,CL.fg);
+          dc(wsSF,sfR,6,tsk5?(tsk5.osNumero||'—'):'SEM TSK',b5,tsk5?CL.yel:CL.red,!tsk5);
+          dc(wsSF,sfR,7,tsk5?(tsk5.prioridade||'—'):'—',b5,tsk5?(PCOL[up(tsk5.prioridade)]||CL.muted):CL.muted,false,'center');
+          dc(wsSF,sfR,8,inc.causa||'—',b5,CL.muted);
+          dc(wsSF,sfR,9,(inc.detalhe||'').toString().trim().slice(0,120),b5,CL.muted);
           sfR++;
         });
-        wsSF.getRow(sfR).height=10; for(var _cs2=1;_cs2<=9;_cs2++) wsSF.getCell(sfR,_cs2).fill=fl(CL.hdr); sfR++;
+        padDiv(wsSF,sfR,9); sfR++;
       });
-      backBtn(wsSF,sfR);
+      wsSF.mergeCells(sfR,1,sfR,9); backBtn(wsSF,sfR,9);
 
       /* ══════════════════ PRODUTIVIDADE ══════════════════ */
-      var wsP = wb.addWorksheet('Produtividade',{properties:{tabColor:{argb:ab('2ECC71')}}});
-      wsP.columns=[{width:4},{width:12},{width:12},{width:12},{width:10},{width:10}];
+      var wsP = wb.addWorksheet('Produtividade',{properties:{tabColor:{argb:ab(CL.grn)}}});
+      wsP.columns=[{width:4},{width:14},{width:14},{width:12},{width:10},{width:12}];
       wsP.views=[{state:'frozen',ySplit:2}];
       titleRow(wsP,1,'Produtividade — Encerramentos Diários (30 dias)',6);
-      infoRow(wsP,2,fStr,6);
+      infoRow(wsP,2,baseFStr,6);
       var pR=3;
       filtered.forEach(function(c){
         var selD4=prodPrio.daily[c.id];
         var hist4=ST[c.id].prodHistory;
         var dias4=hist4?computeProdDiarioFromHistory(hist4,ST[c.id].cls,30,selD4):diasFromMap(computeProdDiario(ST[c.id].cls,30,selD4));
         contractHdr(wsP,pR,c,c.name+(selD4?' — Prioridade: '+selD4:' — Todas as prioridades'),6); pR++;
-        hdrRow(wsP,pR,['','Data','Dentro SLA','Fora SLA','Total','% SLA']); pR++;
+        hdrRow(wsP,pR,['','Data','Dentro do SLA','Fora do SLA','Total','% SLA']); pR++;
         var totDen=0, totFora=0, totTot=0;
         dias4.forEach(function(d,di){
           var b6=rowbg(di);
-          wsP.getRow(pR).height=15; wsP.getCell(pR,1).fill=fl(b6);
-          sc(wsP,pR,2,d.dia,b6,CL.muted,false,'center');
-          sc(wsP,pR,3,d.dentro,b6,CL.green,false,'center');
-          sc(wsP,pR,4,d.fora,b6,CL.red,false,'center');
-          sc(wsP,pR,5,d.total,b6,CL.fg,true,'center');
+          wsP.getRow(pR).height=15;
+          dc(wsP,pR,1,'',b6,null,false,'center');
+          dc(wsP,pR,2,d.dia,b6,CL.muted,false,'center');
+          dc(wsP,pR,3,d.dentro,b6,d.dentro>0?CL.grn:CL.muted,d.dentro>0,'center');
+          dc(wsP,pR,4,d.fora,b6,d.fora>0?CL.red:CL.muted,false,'center');
+          dc(wsP,pR,5,d.total,b6,CL.fg,true,'center');
           var slaV=d.pct!=null?d.pct.toFixed(1)+'%':'—';
-          sc(wsP,pR,6,slaV,b6,d.pct!=null?(d.pct>=80?CL.green:d.pct>=60?CL.yel:CL.red):CL.muted,true,'center');
+          dc(wsP,pR,6,slaV,b6,d.pct!=null?(d.pct>=80?CL.grn:d.pct>=60?CL.yel:CL.red):CL.muted,true,'center');
           totDen+=d.dentro; totFora+=d.fora; totTot+=d.total; pR++;
         });
-        wsP.getRow(pR).height=20; wsP.mergeCells(pR,1,pR,2);
-        sc(wsP,pR,1,'TOTAL 30 DIAS',CL.hdr2,CL.prime,true);
         var slaTot=totTot>0?(totDen/totTot*100).toFixed(1)+'%':'—';
-        sc(wsP,pR,3,totDen,CL.hdr2,CL.green,true,'center');
-        sc(wsP,pR,4,totFora,CL.hdr2,CL.red,true,'center');
-        sc(wsP,pR,5,totTot,CL.hdr2,CL.fg,true,'center');
-        sc(wsP,pR,6,slaTot,CL.hdr2,totTot>0&&totDen/totTot>=0.8?CL.green:CL.yel,true,'center'); pR++;
-        wsP.getRow(pR).height=10; for(var _cp=1;_cp<=6;_cp++) wsP.getCell(pR,_cp).fill=fl(CL.hdr); pR++;
+        totRow(wsP,pR,[{v:'',a:'center'},{v:'TOTAL 30 DIAS',a:'left'},{v:totDen,a:'center'},{v:totFora,a:'center',fg:CL.red},{v:totTot,a:'center'},{v:slaTot,a:'center',fg:totTot>0&&totDen/totTot>=0.8?CL.grn:CL.yel}],6); pR++;
+        padDiv(wsP,pR,6); pR++;
       });
-      backBtn(wsP,pR);
+      wsP.mergeCells(pR,1,pR,6); backBtn(wsP,pR,6);
 
       /* ══════════════════ CAMPO x CCI ══════════════════ */
       var wsCC = wb.addWorksheet('Campo x CCI',{properties:{tabColor:{argb:ab(CL.cci)}}});
-      wsCC.columns=[{width:4},{width:20},{width:12},{width:10},{width:10},{width:10},{width:10},{width:20}];
+      wsCC.columns=[{width:4},{width:20},{width:14},{width:10},{width:10},{width:12},{width:10},{width:22}];
       wsCC.views=[{state:'frozen',ySplit:3}];
       titleRow(wsCC,1,'Produção — Campo × CCI/CCO por Contrato',8);
-      infoRow(wsCC,2,fStr,8);
-      hdrRow(wsCC,3,['','Contrato','Encerradas','CCI Qtd','% CCI','Campo Qtd','% Campo','SLA CCI  ·  Campo']);
+      infoRow(wsCC,2,baseFStr,8);
+      hdrRow(wsCC,3,['','Contrato','Encerradas','CCI Qtd','% CCI','Campo Qtd','% Campo','SLA CCI  ·  SLA Campo']);
       filtered.forEach(function(c,i){
         var K7=ST[c.id].kpis||{}, pc7=K7.prodCat||{CCI:{},Campo:{}};
         function tot7(o){return nn(o.dentro)+nn(o.fora)+nn(o.preditiva)+nn(o.semPrazo);}
@@ -2926,24 +3164,25 @@
         function pp7(n){ return grand7>0?Math.round(n/grand7*1000)/10:0; }
         function sla7(o){ var bv=nn(o.dentro)+nn(o.fora); return bv>0?Math.round(nn(o.dentro)/bv*1000)/10:null; }
         var r=4+i, b=rowbg(i);
-        wsCC.getRow(r).height=22; wsCC.getCell(r,1).fill=fl(b);
-        sc(wsCC,r,2,c.name,b,chex(c),true);
-        sc(wsCC,r,3,grand7,b,CL.fg,true,'center');
-        sc(wsCC,r,4,cciT7,b,CL.cci,false,'center');
-        sc(wsCC,r,5,pp7(cciT7).toFixed(1)+'%',b,CL.cci,false,'center');
-        sc(wsCC,r,6,campoT7,b,chex(c),false,'center');
-        sc(wsCC,r,7,pp7(campoT7).toFixed(1)+'%',b,chex(c),false,'center');
-        var sStr=(sla7(pc7.CCI)!=null?sla7(pc7.CCI).toFixed(1)+'% CCI':'— CCI')+'  ·  '+(sla7(pc7.Campo)!=null?sla7(pc7.Campo).toFixed(1)+'% Campo':'— Campo');
-        sc(wsCC,r,8,sStr,b,CL.green,false,'center');
+        wsCC.getRow(r).height=22;
+        dc(wsCC,r,1,'',b,null,false,'center');
+        dc(wsCC,r,2,c.name,b,textHex(c),true);
+        dc(wsCC,r,3,grand7,b,CL.fg,true,'center');
+        dc(wsCC,r,4,cciT7,b,CL.cci,false,'center');
+        dc(wsCC,r,5,pp7(cciT7).toFixed(1)+'%',b,CL.cci,false,'center');
+        dc(wsCC,r,6,campoT7,b,textHex(c),false,'center');
+        dc(wsCC,r,7,pp7(campoT7).toFixed(1)+'%',b,textHex(c),false,'center');
+        var sStr=(sla7(pc7.CCI)!=null?sla7(pc7.CCI).toFixed(1)+'%':'—')+' CCI  ·  '+(sla7(pc7.Campo)!=null?sla7(pc7.Campo).toFixed(1)+'%':'—')+' Campo';
+        dc(wsCC,r,8,sStr,b,CL.grn,false,'center');
       });
-      wsCC.addRow([]); backBtn(wsCC,wsCC.rowCount+1);
+      var ccBR=4+filtered.length+1; wsCC.mergeCells(ccBR,1,ccBR,8); backBtn(wsCC,ccBR,8);
 
       /* ══════════════════ BACKLOG ══════════════════ */
-      var wsBL = wb.addWorksheet('Backlog',{properties:{tabColor:{argb:ab(CL.prime)}}});
-      wsBL.columns=[{width:4},{width:12},{width:6},{width:12},{width:22},{width:14},{width:12},{width:22},{width:14}];
+      var wsBL = wb.addWorksheet('Backlog',{properties:{tabColor:{argb:ab(CL.org)}}});
+      wsBL.columns=[{width:4},{width:14},{width:6},{width:14},{width:24},{width:18},{width:16},{width:26},{width:14}];
       wsBL.views=[{state:'frozen',ySplit:3}];
-      titleRow(wsBL,1,'Backlog — Lista de TSKs em Aberto',9);
-      infoRow(wsBL,2,fStr,9);
+      titleRow(wsBL,1,'Backlog — TSKs em Aberto',9);
+      infoRow(wsBL,2,baseFStr,9);
       hdrRow(wsBL,3,['','OS','P.','Contrato','Status SLA','Região','Cidade','Fila Atual','Criação']);
       var blR=4;
       filtered.forEach(function(c){
@@ -2953,27 +3192,28 @@
           return (a.regiao||'').localeCompare(b2.regiao||'','pt-BR');
         }).forEach(function(t,ti){
           var b9=rowbg(ti);
-          wsBL.getRow(blR).height=15; wsBL.getCell(blR,1).fill=fl(b9);
-          sc(wsBL,blR,2,t.osNumero||'—',b9,CL.fg,true);
-          sc(wsBL,blR,3,t.prioridade||'—',b9,PCOL[up(t.prioridade)]||CL.muted,true,'center');
-          sc(wsBL,blR,4,c.name,b9,chex(c));
-          sc(wsBL,blR,5,t.statusSla||'—',b9,t.statusSla==='FORA DO SLA'?CL.red:t.statusSla==='PREDITIVA'?CL.yel:CL.muted);
-          sc(wsBL,blR,6,t.regiao||'—',b9,CL.fg);
-          sc(wsBL,blR,7,t.cidade||'—',b9,CL.muted);
-          sc(wsBL,blR,8,t.filaAtual||'—',b9,CL.muted);
-          sc(wsBL,blR,9,t.dataCriacaoAS||t.dataCriacao||'—',b9,CL.muted,false,'center');
+          wsBL.getRow(blR).height=15;
+          dc(wsBL,blR,1,'',b9,null,false,'center');
+          dc(wsBL,blR,2,t.osNumero||'—',b9,CL.fg,true);
+          dc(wsBL,blR,3,t.prioridade||'—',b9,PCOL[up(t.prioridade)]||CL.muted,true,'center');
+          dc(wsBL,blR,4,c.name,b9,textHex(c));
+          dc(wsBL,blR,5,t.statusSla||'—',b9,t.statusSla==='FORA DO SLA'?CL.red:t.statusSla==='PREDITIVA'?CL.yel:CL.muted);
+          dc(wsBL,blR,6,t.regiao||'—',b9,CL.fg);
+          dc(wsBL,blR,7,t.cidade||'—',b9,CL.muted);
+          dc(wsBL,blR,8,t.filaAtual||'—',b9,CL.muted);
+          dc(wsBL,blR,9,t.dataCriacaoAS||t.dataCriacao||'—',b9,CL.muted,false,'center');
           blR++;
         });
       });
-      backBtn(wsBL,blR);
+      wsBL.mergeCells(blR,1,blR,9); backBtn(wsBL,blR,9);
 
       /* ══════════════════ INCIDENTES ══════════════════ */
       var wsI = wb.addWorksheet('Incidentes',{properties:{tabColor:{argb:ab(CL.red)}}});
-      wsI.columns=[{width:4},{width:12},{width:14},{width:12},{width:10},{width:16},{width:12},{width:16},{width:24}];
+      wsI.columns=[{width:4},{width:14},{width:18},{width:14},{width:10},{width:20},{width:14},{width:20},{width:30}];
       wsI.views=[{state:'frozen',ySplit:3}];
       titleRow(wsI,1,'Incidentes Ativos — Sites Fora',9);
-      infoRow(wsI,2,fStr,9);
-      hdrRow(wsI,3,['','Contrato','Site','END_ID','Duração','Região','TSK','Causa','Detalhe']);
+      infoRow(wsI,2,baseFStr,9);
+      hdrRow(wsI,3,['','Contrato','Site','END_ID','Duração','Região','TSK Aberta','Causa','Detalhe']);
       var iR=4, nowI=Date.now();
       filtered.forEach(function(c){
         var incsI=(ST[c.id].incs||[]).filter(function(i){return up(i.statusTrat||'ATIVO')!=='RESOLVIDO';});
@@ -2983,19 +3223,20 @@
           var durH=hDt?Math.floor((nowI-hDt.getTime())/3600000):0;
           var dur=durH<24?durH+'h':(durH/24).toFixed(1)+'d';
           var tskI=tskAbertaDe(ST[c.id].cls,inc.enderecoId);
-          wsI.getRow(iR).height=15; wsI.getCell(iR,1).fill=fl(bI);
-          sc(wsI,iR,2,c.name,bI,chex(c),true);
-          sc(wsI,iR,3,inc.site||'—',bI,CL.fg,true);
-          sc(wsI,iR,4,inc.enderecoId||'—',bI,CL.muted);
-          sc(wsI,iR,5,dur,bI,CL.red,true,'center');
-          sc(wsI,iR,6,c.region(inc)||'—',bI,CL.muted);
-          sc(wsI,iR,7,tskI?(tskI.osNumero||'—'):'SEM TSK',bI,tskI?CL.yel:CL.red,!tskI);
-          sc(wsI,iR,8,inc.causa||'—',bI,CL.muted);
-          sc(wsI,iR,9,(inc.detalhe||'').toString().trim().slice(0,100),bI,CL.muted);
+          wsI.getRow(iR).height=15;
+          dc(wsI,iR,1,'',bI,null,false,'center');
+          dc(wsI,iR,2,c.name,bI,textHex(c),true);
+          dc(wsI,iR,3,inc.site||'—',bI,CL.fg,true);
+          dc(wsI,iR,4,inc.enderecoId||'—',bI,CL.muted);
+          dc(wsI,iR,5,dur,bI,CL.red,true,'center');
+          dc(wsI,iR,6,c.region(inc)||'—',bI,CL.fg);
+          dc(wsI,iR,7,tskI?(tskI.osNumero+(tskI.prioridade?' ('+tskI.prioridade+')':'')):'SEM TSK',bI,tskI?CL.yel:CL.red,!tskI);
+          dc(wsI,iR,8,inc.causa||'—',bI,CL.muted);
+          dc(wsI,iR,9,(inc.detalhe||'').toString().trim().slice(0,120),bI,CL.muted);
           iR++;
         });
       });
-      backBtn(wsI,iR);
+      wsI.mergeCells(iR,1,iR,9); backBtn(wsI,iR,9);
 
       /* ══════════════════ DOWNLOAD ══════════════════ */
       var buffer = await wb.xlsx.writeBuffer();
@@ -3031,6 +3272,9 @@
   window.exportarXlsx       = exportarXlsx;
   window.openUpdListDrill   = openUpdListDrill;
   window.openProdCatDrill   = openProdCatDrill;
+  window.setRetTipo         = setRetTipo;
+  window.setRetPeriodo      = setRetPeriodo;
+  window.openRetDrill       = openRetDrill;
   renderStrips();
   renderFilterButtons();
   renderHeroKpis();
