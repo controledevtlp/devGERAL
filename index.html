@@ -443,14 +443,14 @@
 <div class="g-main">
 
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Controle de Retorno — por contrato (suspensões e tramitações que voltam para a fila)</div>
+    <div class="g-sec"><span class="g-sec-dot"></span>Controle de Retorno — por contrato (suspensões e tramitações que voltaram para a fila)</div>
     <div class="g-filter-bar" id="retFilterBar"></div>
     <div class="g-3col" id="retCardsRow"></div>
   </div>
 
   <div>
-    <div class="g-sec"><span class="g-sec-dot"></span>Atenção agora — retorno vencido, ainda fora da fila (mais atrasadas primeiro)</div>
-    <div class="g-card" id="retVencBox"></div>
+    <div class="g-sec" id="retRecTit"><span class="g-sec-dot"></span>Últimos retornos à fila (mais recentes primeiro)</div>
+    <div class="g-card" id="retRecBox"></div>
   </div>
 
   <div>
@@ -2225,19 +2225,19 @@
   }
 
   /* ── CONTROLE DE RETORNO ─────────────────────────────────────────
-     Versão enxuta da página "Controle de Retorno" do painel de cada contrato. Os episódios (suspensão/tramitação → volta para a fila) são
-     calculados no painel autenticado, a partir do histórico de linhas das TSKs, e publicados no snapshot (campo "retorno" — formato de
-     TRJ.retorno.compactar). Aqui só se recalcula o que depende da hora de agora (tempo parado e retorno vencido).
-     Os nomes acompanham o filtro de tipo: só suspensões, só tramitações ou as duas juntas. */
+     Versão enxuta da página "Controle de Retorno" do painel de cada contrato: o que foi suspenso/tramitado e VOLTOU para a fila
+     (quem segue suspenso/tramitado não é controlado). Os episódios são calculados no painel autenticado, a partir do histórico de linhas
+     das TSKs, e publicados no snapshot (campo "retorno" — formato de TRJ.retorno.compactar).
+     Os nomes acompanham o filtro de tipo: só suspensões, só tramitações ou as duas juntas. Clique na TSK copia o número. */
   var RET_CL = {
     ANTECIPADO:   { rot:'Retornou ANTES do planejado', cor:'#e74c3c' },
     SEM_PREVISAO: { rot:'Retornou sem previsão',       cor:'#f39c12' },
     NO_PRAZO:     { rot:'Retornou no prazo',           cor:'#2ecc71' }
   };
   var RET_VOC = {
-    TODOS:      { agora:'Fora da fila agora', segue:'segue fora da fila', tempo:'Tempo médio fora da fila', em:'Fora da fila há', plural:'suspensões e tramitações' },
-    SUSPENSAO:  { agora:'Suspensas agora',    segue:'segue suspensa',     tempo:'Tempo médio suspensa',    em:'Suspensa há',     plural:'suspensões' },
-    TRAMITACAO: { agora:'Tramitadas agora',   segue:'segue tramitada',    tempo:'Tempo médio tramitada',   em:'Tramitada há',    plural:'tramitações' }
+    TODOS:      { ret:'Retornaram à fila',          lista:'Últimos retornos à fila' },
+    SUSPENSAO:  { ret:'Suspensões que retornaram',  lista:'Últimas suspensões que retornaram' },
+    TRAMITACAO: { ret:'Tramitações que retornaram', lista:'Últimas tramitações que retornaram' }
   };
   var retTipo = 'TODOS', retPeriodo = 'tudo', retCache = null;
 
@@ -2247,14 +2247,11 @@
     var hh = Math.floor(a/60), mm = a%60; if(hh<48) return hh+'h'+('0'+mm).slice(-2)+'min';
     return Math.floor(hh/24)+'d'+(hh%24)+'h';
   }
+  /* só o que já voltou para a fila (x.b = hora do retorno) */
   function retExpandir(arr){
-    var now = Date.now();
-    return (arr||[]).map(function(x){
-      var ini = x.a?new Date(x.a):null, prev = x.v?new Date(x.v):null, ret = x.b?new Date(x.b):null;
-      return { os:x.o, site:x.s||'', regiao:x.r||'', prio:x.p||'—', tipo:x.t==='S'?'SUSPENSAO':'TRAMITACAO', inferida:!!x.i, motivo:x.m||'', quem:x.q||'', retornoPor:x.rp||'',
-        inicio:ini, previsto:prev, retorno:ret, classe:x.k, deltaMin:x.d==null?null:x.d,
-        suspensaMin: ini ? Math.round(((ret?ret.getTime():now)-ini.getTime())/60000) : null,
-        vencido: x.k==='SUSPENSA' && !!prev && prev.getTime()<now };
+    return (arr||[]).filter(function(x){ return x.b; }).map(function(x){
+      return { os:x.o, site:x.s||'', regiao:x.r||'', prio:x.p||'—', tipo:x.t==='S'?'SUSPENSAO':'TRAMITACAO', inferida:!!x.i, motivo:x.m||'', quem:x.q||'',
+        previsto:x.v?new Date(x.v):null, retorno:new Date(x.b), classe:x.k, deltaMin:x.d==null?null:x.d };
     });
   }
   function retFiltra(evs){
@@ -2262,9 +2259,8 @@
     return evs.filter(function(e){
       if(retTipo!=='TODOS' && e.tipo!==retTipo) return false;
       if(retPeriodo==='tudo') return true;
-      var d = e.retorno||e.inicio; if(!d) return true;
-      if(retPeriodo==='hoje') return localDay(d)===hoje;
-      var h = (now-d)/36e5; return retPeriodo==='24h' ? h<=24 : h<=168;
+      if(retPeriodo==='hoje') return localDay(e.retorno)===hoje;
+      var h = (now-e.retorno)/36e5; return retPeriodo==='24h' ? h<=24 : h<=168;
     });
   }
   function retMotivo(c, e){
@@ -2274,12 +2270,11 @@
   /* números de um contrato (null = ainda sem publicação com o retorno) */
   function retCalc(c){
     var s = ST[c.id]; if(!s || s.error || !s.retRaw) return null;
-    var ev = retFiltra(retExpandir(s.retRaw));
+    var ev = retFiltra(retExpandir(s.retRaw)), now = new Date(), hoje = localDay(now);
     function por(k){ return ev.filter(function(e){ return e.classe===k; }); }
-    var fora = por('SUSPENSA'), ret = ev.filter(function(e){ return e.retorno; }), cT = ret.filter(function(e){ return e.suspensaMin!=null; });
     var ant = por('ANTECIPADO'), nop = por('NO_PRAZO');
-    return { ev:ev, fora:fora, venc:fora.filter(function(e){ return e.vencido; }), ant:ant, semp:por('SEM_PREVISAO'), nop:nop, ret:ret,
-      medMin: cT.length ? Math.round(cT.reduce(function(a,e){ return a+e.suspensaMin; },0)/cT.length) : null, comAw: ant.length+nop.length };
+    return { ev:ev, ant:ant, semp:por('SEM_PREVISAO'), nop:nop,
+      hoje:ev.filter(function(e){ return localDay(e.retorno)===hoje; }), hora:ev.filter(function(e){ return now-e.retorno<=36e5; }), comAw:ant.length+nop.length };
   }
 
   function setRetTipo(v){ retTipo = v; renderRetorno(); }
@@ -2298,7 +2293,7 @@
     bar.innerHTML = '<span class="g-filter-lbl">Tipo:</span>' + chips([['TODOS','Suspensões + tramitações'],['SUSPENSAO','Só suspensões'],['TRAMITACAO','Só tramitações']], retTipo, 'setRetTipo') +
       '<span class="g-filter-lbl" style="margin-left:14px">Período:</span>' + chips([['hoje','Hoje'],['24h','24 h'],['7d','7 dias'],['tudo','Todo o período']], retPeriodo, 'setRetPeriodo');
 
-    retCache = { porContrato:{}, venc:[], ant:[] };
+    retCache = { porContrato:{}, rec:[], ant:[] };
     var cards = CONTRACTS.map(function(c){
       var s = ST[c.id], K = retCalc(c);
       var cab = '<div class="g-ct"><span class="g-ct-dot" style="background:'+c.color+'"></span><span style="color:'+c.color+'">'+c.name+'</span><span style="font-weight:600;letter-spacing:.5px;text-transform:none">· '+c.label+'</span></div>';
@@ -2306,7 +2301,7 @@
       if(s.error)   return '<div class="g-card">'+cab+'<div class="g-err">Contrato offline</div></div>';
       if(!K)        return '<div class="g-card">'+cab+'<div class="g-empty">O Controle de Retorno deste contrato ainda não foi publicado.<br>Abra o Dashboard no painel principal (com os arquivos de atividades importados) para publicar.</div></div>';
       retCache.porContrato[c.id] = K;
-      K.venc.forEach(function(e){ retCache.venc.push({ c:c, e:e }); });
+      K.ev.forEach(function(e){ retCache.rec.push({ c:c, e:e }); });
       K.ant.forEach(function(e){ retCache.ant.push({ c:c, e:e }); });
       function kpi(lbl, val, cor, chave){
         return '<div class="g-kpi" style="cursor:pointer" onclick="openRetDrill(\''+c.id+'\',\''+chave+'\')" title="Ver as TSKs"><div class="g-kpi-val" style="color:'+cor+'">'+val+'</div><div class="g-kpi-lbl">'+lbl+'</div></div>';
@@ -2319,50 +2314,43 @@
       var pct = K.comAw ? '<div style="font-size:11px;color:var(--muted);margin-top:8px"><b style="color:'+(K.ant.length/K.comAw>=.5?'#e74c3c':(K.ant.length/K.comAw>=.25?'#f39c12':'#2ecc71'))+'">'+Math.round(K.ant.length/K.comAw*100)+'%</b> dos retornos com data prevista voltaram antes ('+K.ant.length+' de '+K.comAw+')</div>' : '';
       return '<div class="g-card">'+cab+
         '<div class="g-kpi-row" style="margin-top:0">'+
-          kpi(V.agora, fmtN(K.fora.length), '#3498db', 'agora')+
-          kpi('Retorno vencido', fmtN(K.venc.length), '#e74c3c', 'venc')+
+          kpi(V.ret, fmtN(K.ev.length), '#3498db', 'ret')+
+          kpi('Retornaram hoje', fmtN(K.hoje.length), '#b07bd0', 'hoje')+
+          kpi('Última hora', fmtN(K.hora.length), '#b07bd0', 'hora')+
           kpi('Antes do planejado', fmtN(K.ant.length), '#e74c3c', 'ant')+
           kpi('Sem previsão', fmtN(K.semp.length), '#f39c12', 'semp')+
           kpi('No prazo', fmtN(K.nop.length), '#2ecc71', 'nop')+
-          kpi(V.tempo.replace('Tempo médio ','Tempo médio<br>'), K.medMin==null?'—':retDur(K.medMin), '#ff8c00', 'ret')+
         '</div>'+barra+pct+
         '<div style="font-size:10px;color:var(--muted);margin-top:8px">Publicado em '+fmtDtFull(s.savedAt)+'</div></div>';
     });
     document.getElementById('retCardsRow').innerHTML = cards.join('');
 
-    /* listas de atenção (todos os contratos juntos) */
-    retCache.venc.sort(function(a,b){ return a.e.previsto - b.e.previsto; });
+    /* listas (todos os contratos juntos), mais recentes primeiro */
+    retCache.rec.sort(function(a,b){ return b.e.retorno - a.e.retorno; });
     retCache.ant.sort(function(a,b){ return b.e.retorno - a.e.retorno; });
-    document.getElementById('retVencBox').innerHTML = retListaHtml('venc', 12);
+    document.getElementById('retRecTit').lastChild.nodeValue = V.lista + ' (mais recentes primeiro)';
+    document.getElementById('retRecBox').innerHTML = retListaHtml('rec', 15);
     document.getElementById('retAntBox').innerHTML = retListaHtml('ant', 12);
   }
 
   function retTag(c){ return '<span style="font-size:10px;font-weight:800;color:'+c.color+'">'+c.name+'</span>'; }
   function retPrio(p){ return '<span style="font-weight:800;color:'+(PRIO_COR[p]||'var(--fg)')+'">'+escHtml(p||'—')+'</span>'; }
   function retLinhas(itens, modo, comTipo){
-    var V = RET_VOC[retTipo];
-    var thead = '<tr><th>Contrato</th>'+(comTipo?'<th>Tipo</th>':'')+['TSK','Site','Prio','Região','Motivo','Operador'].concat(modo==='venc' ? ['Previsto (AW)','Venceu há'] : (modo==='ant' ? ['Previsto (AW)','Retornou em','Antecipou'] : [V.em.replace(' há',' em'),'Previsto (AW)','Retornou em','Situação'])).map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr>';
+    var thead = '<tr><th>Contrato</th>'+(comTipo?'<th>Tipo</th>':'')+['TSK','Site','Prio','Região','Motivo','Operador','Retornou em','Previsto (AW)', modo==='ant' ? 'Antecipou' : 'Situação'].map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr>';
     var body = itens.map(function(it){
-      var c = it.c, e = it.e;
+      var c = it.c, e = it.e, cl = RET_CL[e.classe];
       var tipoTd = comTipo ? '<td><span class="g-badge-s" style="color:'+(e.tipo==='SUSPENSAO'?'#b07bd0':'#3498db')+';background:rgba(255,255,255,.06)">'+(e.tipo==='SUSPENSAO'?'SUSPENSÃO':'TRAMITAÇÃO')+'</span></td>' : '';
-      var base = '<td>'+retTag(c)+'</td>'+tipoTd+'<td style="font-weight:700;white-space:nowrap">'+escHtml(e.os)+'</td><td>'+escHtml(e.site||'—')+'</td><td>'+retPrio(e.prio)+'</td><td>'+escHtml(e.regiao||'—')+'</td>'+
-        '<td class="det" title="'+escHtml(e.motivo)+'">'+escHtml(retMotivo(c,e))+'</td><td>'+escHtml(e.inferida?'(início não identificado)':e.quem)+'</td>';
-      var fim;
-      if(modo==='venc') fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="color:#e74c3c;font-weight:800">'+retDur((Date.now()-e.previsto.getTime())/60000)+'</td>';
-      else if(modo==='ant') fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="white-space:nowrap">'+fmtDt(e.retorno)+'</td><td style="color:#e74c3c;font-weight:800">'+retDur(e.deltaMin)+'</td>';
-      else {
-        var cl = RET_CL[e.classe], sit = e.classe==='SUSPENSA' ? badgeS(e.vencido?'RETORNO VENCIDO':V.segue.replace('segue ','Ainda '), e.vencido?'#e74c3c':'#3498db', e.vencido?'rgba(231,76,60,.16)':'rgba(52,152,219,.16)')
-          : badgeS(e.classe==='ANTECIPADO' ? 'ANTECIPADO '+retDur(e.deltaMin) : (cl?cl.rot:e.classe), cl?cl.cor:'#8a8a93', 'rgba(255,255,255,.06)');
-        fim = '<td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.inicio)+'</td><td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td><td style="white-space:nowrap">'+fmtDt(e.retorno)+'</td><td>'+sit+'</td>';
-      }
-      return '<tr>'+base+fim+'</tr>';
+      var ult = modo==='ant' ? '<td style="color:#e74c3c;font-weight:800">'+retDur(e.deltaMin)+'</td>'
+        : '<td>'+badgeS(e.classe==='ANTECIPADO' ? 'ANTECIPADO '+retDur(e.deltaMin) : (cl?cl.rot:e.classe), cl?cl.cor:'#8a8a93', 'rgba(255,255,255,.06)')+'</td>';
+      return '<tr><td>'+retTag(c)+'</td>'+tipoTd+'<td class="g-tsk" data-os="'+escHtml(e.os)+'" title="Clique para copiar a TSK" style="font-weight:700;white-space:nowrap;cursor:copy">'+escHtml(e.os)+'</td><td>'+escHtml(e.site||'—')+'</td><td>'+retPrio(e.prio)+'</td><td>'+escHtml(e.regiao||'—')+'</td>'+
+        '<td class="det" title="'+escHtml(e.motivo)+'">'+escHtml(retMotivo(c,e))+'</td><td>'+escHtml(e.inferida?'(não identificado)':e.quem)+'</td>'+
+        '<td style="white-space:nowrap">'+fmtDt(e.retorno)+'</td><td style="white-space:nowrap;color:var(--muted)">'+fmtDt(e.previsto)+'</td>'+ult+'</tr>';
     }).join('');
     return '<thead>'+thead+'</thead><tbody>'+body+'</tbody>';
   }
   function retListaHtml(modo, lim){
     var itens = retCache[modo];
-    var V = RET_VOC[retTipo];
-    if(!itens.length) return '<div class="g-empty">'+(modo==='venc' ? 'Nenhuma TSK com retorno vencido ('+V.segue+'). 👏' : 'Nenhum retorno antes do planejado no período.')+'</div>';
+    if(!itens.length) return '<div class="g-empty">'+(modo==='ant' ? 'Nenhum retorno antes do planejado no período.' : 'Nenhum retorno à fila no período.')+'</div>';
     var mostra = itens.slice(0, lim);
     return '<div class="g-dtbl-wrap" style="max-height:none"><table class="g-dtbl">'+retLinhas(mostra, modo, retTipo==='TODOS')+'</table></div>'+
       (itens.length>lim ? '<div style="text-align:center;padding:10px"><button class="g-btn" onclick="openRetDrill(\'*\',\''+modo+'\')">Ver todos ('+fmtN(itens.length)+')</button></div>'
@@ -2371,23 +2359,26 @@
   /* drill: id de contrato ('*' = todos os contratos) + qual lista */
   function openRetDrill(id, chave){
     if(!retCache) return;
-    var V = RET_VOC[retTipo], itens = [], titulo = '';
-    var nomes = { agora:V.agora, venc:'Retorno vencido ('+V.segue+')', ant:'Retornaram ANTES do planejado', semp:'Retornaram sem previsão', nop:'Retornaram no prazo', ret:'Todos os retornos do filtro' };
+    var V = RET_VOC[retTipo], itens = [];
+    var nomes = { ret:V.ret, rec:V.ret, hoje:'Retornaram hoje', hora:'Retornaram na última hora', ant:'Retornaram ANTES do planejado', semp:'Retornaram sem previsão', nop:'Retornaram no prazo' };
     CONTRACTS.forEach(function(c){
       if(id!=='*' && c.id!==id) return;
       var K = retCache.porContrato[c.id]; if(!K) return;
-      var lista = chave==='agora' ? K.fora : chave==='venc' ? K.venc : chave==='ant' ? K.ant : chave==='semp' ? K.semp : chave==='nop' ? K.nop : K.ret;
+      var lista = chave==='hoje' ? K.hoje : chave==='hora' ? K.hora : chave==='ant' ? K.ant : chave==='semp' ? K.semp : chave==='nop' ? K.nop : K.ev;
       lista.forEach(function(e){ itens.push({ c:c, e:e }); });
     });
-    var modo = chave==='venc' ? 'venc' : (chave==='ant' ? 'ant' : 'geral');
-    if(modo==='venc') itens.sort(function(a,b){ return a.e.previsto-b.e.previsto; });
-    else if(chave==='agora') itens.sort(function(a,b){ return (b.e.vencido-a.e.vencido) || ((a.e.previsto?a.e.previsto.getTime():9e15)-(b.e.previsto?b.e.previsto.getTime():9e15)); });
-    else itens.sort(function(a,b){ return ((b.e.retorno||b.e.inicio||0)-(a.e.retorno||a.e.inicio||0)); });
+    itens.sort(function(a,b){ return b.e.retorno - a.e.retorno; });
     var lim = 600, c1 = id!=='*' ? CONTRACTS.filter(function(c){ return c.id===id; })[0] : null;
-    titulo = (c1 ? c1.name+' · ' : '')+nomes[chave]+' ('+fmtN(itens.length)+')';
-    openGModal(titulo, itens.length ? '<div class="g-dtbl-wrap"><table class="g-dtbl">'+retLinhas(itens.slice(0,lim), modo, retTipo==='TODOS')+'</table></div>'+
+    openGModal((c1 ? c1.name+' · ' : '')+nomes[chave]+' ('+fmtN(itens.length)+')', itens.length ? '<div class="g-dtbl-wrap"><table class="g-dtbl">'+retLinhas(itens.slice(0,lim), chave==='ant' ? 'ant' : 'geral', retTipo==='TODOS')+'</table></div>'+
       (itens.length>lim ? '<div style="text-align:center;padding:10px;font-size:11px;color:var(--muted)">Exibindo '+lim+' de '+fmtN(itens.length)+' registros</div>' : '') : '<div class="g-empty">Sem registros</div>');
   }
+  /* clique na TSK copia o número */
+  document.addEventListener('click', function(e){
+    var el = e.target.closest ? e.target.closest('.g-tsk') : null; if(!el) return;
+    var os = el.getAttribute('data-os'); if(!os) return;
+    var ok = function(){ var t = el.textContent; el.textContent = '✓ copiada'; setTimeout(function(){ el.textContent = t; }, 900); };
+    if(navigator.clipboard) navigator.clipboard.writeText(os).then(ok).catch(function(){ fallbackCopy(os); ok(); }); else { fallbackCopy(os); ok(); }
+  });
 
   /* ── MODAL ──────────────────────────────────────────────────── */
   var _gModalCopyFn = null;
