@@ -2202,8 +2202,9 @@
       {lbl:'Criação NTT', val: fmtDtFull(task.dataCriacaoAS||task.dataCriacao)},
       {lbl:'Vencimento', val: vencTxt},
       {lbl:'Último update', val: updTxt},
+      {lbl:'Atualização', val: (gmgUpd(task).ok ? 'ATUALIZADA' : 'NÃO ATUALIZADA')+' (limite de '+GMG_UPD_H+'h sem update)'},
       {lbl:'Mensagem', val: upd.estado==='sem' ? '—' : ((upd.autor ? upd.autor+': ' : '')+(upd.texto||'—'))},
-      {lbl:'Fila', val: task.habilidadeTrabalho||task.filaAtual||'—'},
+      {lbl:'Fila', val: task.filaAtual||task.habilidadeTrabalho||'—'},
       {lbl:'Tipo atividade', val: task.tipoAtividade||'—'},
       {lbl:'Região / ANF', val: task.regiao||task.anf||'—'}
     ];
@@ -2380,6 +2381,54 @@
     if(navigator.clipboard) navigator.clipboard.writeText(os).then(ok).catch(function(){ fallbackCopy(os); ok(); }); else { fallbackCopy(os); ok(); }
   });
 
+  /* ── GMGs NA FILA: uma seção por contrato/região, cópia dentro de cada título, TSK abre o detalhe ──
+     Atualizada = o operador atualizou nas últimas 4 h (mesma regra do "Sem update +4h" do link do operador; sem update, vale a idade da TSK).
+     Linha copiada: TSK / SITE - FALHA - ATUALIZADA | NÃO ATUALIZADA */
+  var GMG_UPD_H = 4, gmgGrupos = [];
+  function gmgUpd(t){
+    var u = classificarUpd(t.motivoCancelamento), tem = !!(u && u.estado!=='sem' && u.dt);
+    var ref = tem ? u.dt : safeDate(t.dataCriacaoAS||t.dataCriacao);
+    var hs = ref ? (Date.now()-ref.getTime())/36e5 : 0;
+    return { ok: hs<=GMG_UPD_H, hs:hs, tem:tem };
+  }
+  function gmgLinha(t){ return (t.osNumero||t.tskId||'—')+' / '+(t.siteId||t.enderecoId||'—')+' - '+(t.tipoFalha||'—')+' - '+(gmgUpd(t).ok?'ATUALIZADA':'NÃO ATUALIZADA'); }
+  function gmgDur(hs){ var m=Math.round(hs*60); if(m<60) return m+'min'; var h=Math.floor(m/60); return h<48 ? h+'h'+('0'+(m%60)).slice(-2) : Math.floor(h/24)+'d'; }
+  function copiarTexto(txt, btn){
+    var ok=function(){ if(btn){ var t=btn.textContent; btn.textContent='✓ copiado'; setTimeout(function(){ btn.textContent=t; },1300); } };
+    if(navigator.clipboard) navigator.clipboard.writeText(txt).then(ok).catch(function(){ fallbackCopy(txt); ok(); }); else { fallbackCopy(txt); ok(); }
+  }
+  function copyGmgGrp(i, btn){ var g = gmgGrupos[i]; if(g) copiarTexto(g.rows.map(gmgLinha).join('\n'), btn); }
+  function openGmgDrill(title, tasks){
+    var ord = [], m = {};
+    var pOrd = {P1:0,P2:1,P3:2,P4:3,P5:4};
+    tasks.forEach(function(t){
+      var k = (t._contrato||'')+'|'+(t.regiao||'SEM REGIÃO');
+      if(!m[k]){ m[k] = { contrato:t._contrato||'', cor:t._color||'var(--primary)', regiao:t.regiao||'SEM REGIÃO', rows:[] }; ord.push(m[k]); }
+      m[k].rows.push(t);
+    });
+    var ordC = CONTRACTS.map(function(c){ return c.name; });
+    ord.sort(function(a,b){ return (ordC.indexOf(a.contrato)-ordC.indexOf(b.contrato)) || (a.regiao<b.regiao?-1:1); });
+    ord.forEach(function(g){ g.rows.sort(function(a,b){ var pa=pOrd[up(a.prioridade)], pb=pOrd[up(b.prioridade)]; return (pa==null?9:pa)-(pb==null?9:pb); }); });
+    gmgGrupos = ord;
+    var ids = {}; CONTRACTS.forEach(function(c){ ids[c.name] = c.id; });
+    var html = ord.length ? ord.map(function(g, i){
+      var linhas = g.rows.map(function(t){
+        var p = up(t.prioridade), s = gmgUpd(t), os = t.osNumero||t.tskId||'—', ntt = fmtDt(t.dataCriacaoAS||t.dataCriacao);
+        return '<tr>'+
+          '<td style="font-weight:700;white-space:nowrap"><span style="cursor:pointer;color:var(--primary);text-decoration:underline dotted" title="Ver detalhes (fila, status, atualização, último update…)" onclick="openUpdItemDrill(\''+(ids[g.contrato]||'')+'\',\''+escHtml(os)+'\')">'+escHtml(os)+'</span></td>'+
+          '<td>'+escHtml(t.siteId||t.enderecoId||'—')+'</td><td>'+escHtml(t.cidade||'—')+'</td><td>'+escHtml(t.tipoFalha||'—')+'</td>'+
+          '<td>'+(p?'<span style="font-weight:800;color:'+(PRIO_COR[p]||'var(--fg)')+'">'+escHtml(p)+'</span>':'—')+'</td>'+
+          '<td style="white-space:nowrap;color:var(--muted)">'+ntt+'</td><td>'+vencBadge(t.vencimentoCalc)+'</td>'+
+          '<td>'+badgeS(s.ok?'ATUALIZADA':'NÃO ATUALIZADA', s.ok?'#2ecc71':'#e74c3c', s.ok?'rgba(46,204,113,.16)':'rgba(231,76,60,.16)')+' <span style="font-size:11px;color:var(--muted)">'+(s.tem?'há '+gmgDur(s.hs):'sem update')+'</span></td></tr>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:'+(i?'18px':'0')+' 0 6px">'+
+        '<div style="font-weight:800;letter-spacing:.5px;text-transform:uppercase;font-size:13px"><span style="color:'+g.cor+'">'+escHtml(g.contrato)+'</span> · '+escHtml(g.regiao)+' — '+g.rows.length+'</div>'+
+        '<button class="g-btn" title="Copia: TSK / SITE - FALHA - STATUS (atualizada ou não)" onclick="copyGmgGrp('+i+', this)">📋 Copiar</button></div>'+
+        '<div class="g-dtbl-wrap" style="max-height:none"><table class="g-dtbl"><thead><tr>'+['TSK','Site','Cidade','Falha','P','Criação NTT','Vencimento','Atualização'].map(function(h){ return '<th>'+h+'</th>'; }).join('')+'</tr></thead><tbody>'+linhas+'</tbody></table></div>';
+    }).join('') : '<div class="g-empty">Sem registros</div>';
+    openGModal(title+' ('+fmtN(tasks.length)+')', html, { copyFn: function(){ return ord.map(function(g){ return g.contrato+' · '+g.regiao.toUpperCase()+'\n'+g.rows.map(gmgLinha).join('\n'); }).join('\n\n'); } });
+  }
+
   /* ── MODAL ──────────────────────────────────────────────────── */
   var _gModalCopyFn = null;
   function openGModal(title, bodyHtml, opts) {
@@ -2450,6 +2499,7 @@
   function openDrill(title, tasks, opts) {
     opts = opts || {};
     var mode = opts.mode || 'venc';
+    if (mode === 'gmg') { openGmgDrill(title, tasks); return; }       // GMG na fila: por região, cópia dentro de cada título, TSK abre o detalhe
     var LIM = 1000;
     var list = tasks.slice();
     if (!opts.keepOrder) {
@@ -3263,6 +3313,7 @@
   window.exportarXlsx       = exportarXlsx;
   window.openUpdListDrill   = openUpdListDrill;
   window.openProdCatDrill   = openProdCatDrill;
+  window.copyGmgGrp         = copyGmgGrp;
   window.setRetTipo         = setRetTipo;
   window.setRetPeriodo      = setRetPeriodo;
   window.openRetDrill       = openRetDrill;
