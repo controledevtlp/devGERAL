@@ -3520,6 +3520,7 @@
 
   /* ── Dados da última validação ── */
   var _valRows = [];
+  var _valContractId = null; /* contrato ativo para validação (null = todos) */
 
   /* ── Auth ── */
   function isAuth(){ try { return sessionStorage.getItem(VAL_SESS_KEY)==='1'; } catch(e){ return false; } }
@@ -3807,11 +3808,14 @@
       if(!neMap[ne]) neMap[ne] = [];
       neMap[ne].push(r);
     });
-    /* Coleta TSKs: todos os contratos, status Não iniciado / Iniciado, sem filas excluídas */
+    /* Coleta TSKs do contrato selecionado (ou todos), status Não iniciado / Iniciado */
     var CONTRACTS_G = window.CONTRACTS || [];
     var ST_G = window.ST || {};
+    var activeContracts = (!_valContractId || _valContractId === 'todos')
+      ? CONTRACTS_G
+      : CONTRACTS_G.filter(function(c){ return c.id === _valContractId; });
     var tskList = [];
-    CONTRACTS_G.forEach(function(c){
+    activeContracts.forEach(function(c){
       var backlog = ((ST_G[c.id]||{}).cls||{}).backlog || [];
       backlog.forEach(function(t){
         if(!isStatusAtivo(t.status)) return;
@@ -3849,7 +3853,8 @@
     var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, INTERMITENTE:0, ATIVO:0 };
     _valRows.forEach(function(r){ if(counts[r.resultado]!==undefined) counts[r.resultado]++; });
     /* Summary */
-    var sumHtml = '';
+    var contratoLabel = (!_valContractId || _valContractId === 'todos') ? 'TODOS' : _valContractId.toUpperCase();
+    var sumHtml = '<div style="width:100%;font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">CONTRATO: <strong style="color:var(--fg)">'+contratoLabel+'</strong> · '+tskList.length+' TSKs</div>';
     sumHtml += '<div class="val-badge val-badge-norm">'+counts.NORMALIZADO+' NORMALIZADO</div>';
     sumHtml += '<div class="val-badge val-badge-alarm">'+counts.ALARMADO+' ALARMADO</div>';
     sumHtml += '<div class="val-badge val-badge-preso">'+counts['ALARME PRESO']+' ALARME PRESO</div>';
@@ -3880,6 +3885,7 @@
   }
 
   window.valGerarNEIDs = function(contractId){
+    _valContractId = contractId; /* registra o contrato para a próxima validação */
     var ST_G = window.ST || {};
     var CONTRACTS_G = window.CONTRACTS || [];
     var endIds = [];
@@ -3912,7 +3918,7 @@
 
     document.getElementById('val-neid-output').value = lista;
     document.getElementById('val-neid-info').textContent =
-      labels.join(' + ')+' — '+unique.length+' NE IDs únicos exportados ('+eligibleCount+' TSKs elegíveis de '+totalTsks+' no backlog, excluindo ISOC/SUPORTE/ACESSO, MABE, PREDITIVA)';
+      labels.join(' + ')+' — '+unique.length+' NE IDs exportados ('+eligibleCount+' TSKs Não iniciado/Iniciado de '+totalTsks+' no backlog) · Validação configurada para: '+labels.join(' + ');
     document.getElementById('val-neid-result').style.display = 'block';
   };
 
