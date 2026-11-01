@@ -3506,16 +3506,16 @@
 
   /* ── Coluna Netcool por nome e posição-fallback ── */
   var NC_COLS = [
-    { key:'neId',       name:'NEName',         fallback:2  },
-    { key:'summary',    name:'Summary',        fallback:3  },
-    { key:'addInfo',    name:'AdditionalInfo', fallback:6  },
-    { key:'gravidade',  name:'Gravidade',      fallback:14 },
-    { key:'tally',      name:'Tally',          fallback:16 },
-    { key:'suprEsc',    name:'SuprEsc',        fallback:17 },
-    { key:'lastOcc',    name:'LastOccurrence', altNames:['Última Ocorrência','Last Occurrence','UltimaOcorrencia'], fallback:19 },
-    { key:'node',       name:'Node',           fallback:21 },
-    { key:'endId',      name:'ictAddressID',   fallback:23 },
-    { key:'alarmedRes', name:'AlarmedResource',fallback:24 }
+    { key:'neId',       name:'NEName',         fallback:3  },
+    { key:'endId',      name:'ictAddressID',   fallback:6  },
+    { key:'summary',    name:'Summary',        fallback:7  },
+    { key:'addInfo',    name:'AdditionalInfo', fallback:10 },
+    { key:'gravidade',  name:'Gravidade',      fallback:18 },
+    { key:'tally',      name:'Tally',          fallback:20 },
+    { key:'suprEsc',    name:'SuprEsc',        fallback:21 },
+    { key:'lastOcc',    name:'LastOccurrence', altNames:['Última Ocorrência','Last Occurrence','UltimaOcorrencia'], fallback:23 },
+    { key:'node',       name:'Node',           fallback:25 },
+    { key:'alarmedRes', name:'AlarmedResource',fallback:26 }
   ];
 
   /* ── Dados da última validação ── */
@@ -3659,39 +3659,59 @@
     return Object.keys(kws).filter(function(k){ return k.length > 3; });
   }
 
-  function classificar(row, keywords){
-    /* 1. ALARME PRESO — maior prioridade */
-    var supr = (row.suprEsc||'').toLowerCase();
-    if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
-      return 'ALARME PRESO';
-    }
-    /* 2. INTERMITENTE — Tally > 15 E última ocorrência < 2h atrás */
-    var tally = parseInt(row.tally, 10);
-    if(!isNaN(tally) && tally > 15){
-      var lastOcc = parseNetcoolDate(row.lastOcc);
-      if(lastOcc && (Date.now() - lastOcc.getTime()) < 2 * 60 * 60 * 1000){
-        return 'INTERMITENTE';
-      }
-    }
-    /* 3–5. Correlação por keywords nas colunas D / G / V / Y */
-    if(!keywords.length) return 'ATIVO'; /* sem keywords, não é possível correlacionar */
-    var cols = [
+  /* Status de TSK considerado "ativo" para validação */
+  function isStatusAtivo(status){
+    var s = (status||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    return s === 'NAO INICIADO' || s === 'INICIADO';
+  }
+
+  /* Score de correspondência entre uma linha Netcool e keywords (0 = nenhuma) */
+  function scoreRow(row, keywords){
+    if(!keywords.length) return 0;
+    var combined = [
       (row.summary||'').toLowerCase(),
       (row.addInfo||'').toLowerCase(),
       (row.node||'').toLowerCase(),
       (row.alarmedRes||'').toLowerCase()
-    ];
-    var combined = cols.join('\x00');
+    ].join('\x00');
     var matched = 0;
     for(var k=0; k<keywords.length; k++){
       var kw = keywords[k].toLowerCase().trim();
       if(kw && combined.indexOf(kw) >= 0) matched++;
     }
-    /* Nenhuma keyword encontrada → NORMALIZADO */
-    if(matched === 0) return 'NORMALIZADO';
-    /* Maioria encontrada (≥ 50%) → ALARMADO */
-    if(matched / keywords.length >= 0.5) return 'ALARMADO';
-    /* Correspondência parcial — sinal presente mas fraco */
+    return matched;
+  }
+
+  /* Classifica uma TSK com base em TODAS as linhas Netcool do seu NE */
+  function classificarTsk(ncRows, keywords){
+    /* NE não encontrado no Netcool */
+    if(!ncRows.length) return 'NORMALIZADO';
+    /* 1. ALARME PRESO — qualquer linha */
+    for(var i=0; i<ncRows.length; i++){
+      var supr = (ncRows[i].suprEsc||'').toLowerCase();
+      if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
+        return 'ALARME PRESO';
+      }
+    }
+    /* 2. INTERMITENTE — qualquer linha com Tally > 15 E última ocorrência < 2h */
+    for(var i=0; i<ncRows.length; i++){
+      var tally = parseInt(ncRows[i].tally, 10);
+      if(!isNaN(tally) && tally > 15){
+        var lastOcc = parseNetcoolDate(ncRows[i].lastOcc);
+        if(lastOcc && (Date.now() - lastOcc.getTime()) < 2 * 60 * 60 * 1000){
+          return 'INTERMITENTE';
+        }
+      }
+    }
+    /* 3–5. Correlação: melhor score entre todas as linhas */
+    if(!keywords.length) return 'ATIVO';
+    var maxMatched = 0;
+    for(var i=0; i<ncRows.length; i++){
+      var s = scoreRow(ncRows[i], keywords);
+      if(s > maxMatched) maxMatched = s;
+    }
+    if(maxMatched === 0) return 'NORMALIZADO';
+    if(maxMatched / keywords.length >= 0.5) return 'ALARMADO';
     return 'ATIVO';
   }
 
@@ -3727,21 +3747,41 @@
     }
     var html = '';
     rows.forEach(function(r){
-      var tskCell = r.tsk ? esc(r.tsk.task.osNumero||r.tsk.task.enderecoId||'—') : '<span style="color:var(--muted);font-style:italic">—</span>';
-      var contrCell = r.tsk ? esc(r.tsk.contract.name) : '<span style="color:var(--muted)">—</span>';
+      var task  = r.tsk.task;
+      var contr = r.tsk.contract;
+      var nc    = r.row; /* linha Netcool do melhor match (null = NE ausente) */
+      var ncCnt = r.ncRows ? r.ncRows.length : 0;
+      /* células fixas — da TSK */
+      var contrCell = esc(contr.name||'—');
+      var tskCell   = esc(task.osNumero||task.enderecoId||'—');
+      var endIdCell = esc(task.enderecoId||'—');
+      var neIdTip   = ncCnt > 1 ? ' ('+ncCnt+' alarmes no Netcool)' : '';
+      var neIdCell  = '<span title="'+esc(task.siteId||'')+neIdTip+'">'+esc(task.siteId||'—')+'</span>';
+      /* células do Netcool — substituídas quando NE ausente */
+      var summaryCell, gravCell, suprCell, addCell;
+      if(nc){
+        summaryCell = '<td class="val-addinfo" style="max-width:160px" title="'+esc(nc.summary)+'">'+highlight(nc.summary||'—', r.keywords)+'</td>';
+        var grav = (nc.gravidade||'').toLowerCase();
+        gravCell = '<td style="font-weight:'+(grav==='limpar'?'700':'400')+';color:'+(grav==='limpar'?'#2ecc71':'var(--fg)')+'">'+esc(nc.gravidade||'—')+'</td>';
+        suprCell = '<td style="font-size:10px;color:var(--muted)">'+esc(nc.suprEsc||'—')+'</td>';
+        var titleAdd = esc(nc.addInfo)
+          + (nc.node      ? ' | NODE: '+esc(nc.node)      : '')
+          + (nc.alarmedRes? ' | RES: '+esc(nc.alarmedRes)  : '')
+          + (r.autoKw && r.autoKw.length ? ' | NOTA: '+esc(r.autoKw.join(', ')) : '');
+        addCell = '<td class="val-addinfo" title="'+titleAdd+'">'+highlight((nc.addInfo||'').substring(0,200), r.keywords)+'</td>';
+      } else {
+        var naStyle = 'style="color:var(--muted);font-style:italic;font-size:10px"';
+        summaryCell = '<td '+naStyle+'>N/A no Netcool</td>';
+        gravCell    = '<td style="color:var(--muted)">—</td>';
+        suprCell    = '<td style="color:var(--muted)">—</td>';
+        addCell     = '<td '+naStyle+'>—</td>';
+      }
       html += '<tr data-res="'+esc(r.resultado)+'">';
       html += '<td>'+contrCell+'</td>';
       html += '<td>'+tskCell+'</td>';
-      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.endId||'—')+'</td>';
-      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.neId||'—')+'</td>';
-      html += '<td class="val-addinfo" style="max-width:160px" title="'+esc(r.row.summary)+'">'+highlight(r.row.summary||'—', r.keywords)+'</td>';
-      html += '<td style="font-weight:'+(r.row.gravidade.toLowerCase()==='limpar'?'700':'400')+';color:'+(r.row.gravidade.toLowerCase()==='limpar'?'#2ecc71':'var(--fg)')+'">'+esc(r.row.gravidade||'—')+'</td>';
-      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.suprEsc||'—')+'</td>';
-      var titleAdd = esc(r.row.addInfo)
-        + (r.row.node ? ' | NODE: '+esc(r.row.node) : '')
-        + (r.row.alarmedRes ? ' | RES: '+esc(r.row.alarmedRes) : '')
-        + (r.autoKw && r.autoKw.length ? ' | NOTA: '+esc(r.autoKw.join(', ')) : '');
-      html += '<td class="val-addinfo" title="'+titleAdd+'">'+highlight(r.row.addInfo.substring(0,200), r.keywords)+'</td>';
+      html += '<td style="font-size:10px;color:var(--muted)">'+endIdCell+'</td>';
+      html += '<td style="font-size:10px;color:var(--muted)">'+neIdCell+'</td>';
+      html += summaryCell + gravCell + suprCell + addCell;
       html += '<td>'+resBadge(r.resultado)+'</td>';
       html += '</tr>';
     });
@@ -3750,25 +3790,57 @@
 
   /* ── Validar ── */
   window.valValidar = function(){
-    var rawKw = document.getElementById('val-keywords').value || '';
-    var rawData = document.getElementById('val-data').value || '';
-    if(!rawData.trim()){
-      alert('Cole os dados do Netcool antes de validar.');
-      return;
-    }
-    var keywords = rawKw.split('\n').map(function(k){ return k.trim(); }).filter(function(k){ return k; });
+    var rawKw  = document.getElementById('val-keywords').value || '';
+    var rawData= document.getElementById('val-data').value || '';
+    if(!rawData.trim()){ alert('Cole os dados do Netcool antes de validar.'); return; }
+    var manualKw = rawKw.split('\n').map(function(k){ return k.trim(); }).filter(function(k){ return k; });
     var netcoolRows = parseNetcool(rawData);
     if(!netcoolRows.length){
-      alert('Nenhuma linha de dado encontrada. Verifique se a primeira linha tem os cabeçalhos.');
+      alert('Nenhuma linha encontrada. Verifique se a primeira linha tem os cabeçalhos.');
       return;
     }
-    _valRows = netcoolRows.map(function(row){
-      var tsk = findTsk(row.endId);
-      /* Combina keywords da nota de abertura + palavras manuais (mesmo sem TSK) */
-      var autoKw = tsk ? extractNotaAberturaKeywords((tsk.task||{}).motivoCancelamento) : [];
-      var allKw = autoKw.concat(keywords);
-      var resultado = classificar(row, allKw);
-      return { row: row, resultado: resultado, tsk: tsk, keywords: allKw, autoKw: autoKw };
+    /* Mapa NE_ID (upper) → [linhas Netcool] */
+    var neMap = {};
+    netcoolRows.forEach(function(r){
+      var ne = (r.neId||'').trim().toUpperCase();
+      if(!ne) return;
+      if(!neMap[ne]) neMap[ne] = [];
+      neMap[ne].push(r);
+    });
+    /* Coleta TSKs: todos os contratos, status Não iniciado / Iniciado, sem filas excluídas */
+    var CONTRACTS_G = window.CONTRACTS || [];
+    var ST_G = window.ST || {};
+    var tskList = [];
+    CONTRACTS_G.forEach(function(c){
+      var backlog = ((ST_G[c.id]||{}).cls||{}).backlog || [];
+      backlog.forEach(function(t){
+        if(!isStatusAtivo(t.status)) return;
+        if(t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual)) return;
+        tskList.push({ contract: c, task: t });
+      });
+    });
+    if(!tskList.length){
+      alert('Nenhuma TSK com status "Não iniciado" ou "Iniciado" encontrada no devGERAL.');
+      return;
+    }
+    _valRows = tskList.map(function(item){
+      var t = item.task;
+      var ne = (t.siteId||'').trim().toUpperCase();
+      var ncRows = neMap[ne] || [];
+      var autoKw = extractNotaAberturaKeywords(t.motivoCancelamento);
+      var allKw  = autoKw.concat(manualKw);
+      var resultado = classificarTsk(ncRows, allKw);
+      /* Linha de melhor match para exibição */
+      var bestRow = null;
+      if(ncRows.length){
+        var bestScore = -1;
+        ncRows.forEach(function(r){
+          var s = scoreRow(r, allKw);
+          if(s > bestScore){ bestScore = s; bestRow = r; }
+        });
+        if(!bestRow) bestRow = ncRows[0]; /* fallback: primeiro alarme */
+      }
+      return { row: bestRow, resultado: resultado, tsk: item, keywords: allKw, autoKw: autoKw, ncRows: ncRows };
     });
     /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → INTERMITENTE → ATIVO */
     var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'INTERMITENTE':4, 'ATIVO':5 };
@@ -3824,8 +3896,8 @@
       totalTsks += backlog.length;
       labels.push(c.id.toUpperCase());
       backlog.forEach(function(t){
-        var isPred = t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual);
-        if(!isPred && t.siteId){
+        var excluded = t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual) || !isStatusAtivo(t.status);
+        if(!excluded && t.siteId){
           eligibleCount++;
           endIds.push(t.siteId.trim());
         }
