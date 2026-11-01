@@ -3496,12 +3496,10 @@
 
 <!-- ═══════════════════════════════════════════════════════════
      VALIDAÇÃO NETCOOL — lógica independente do IIFE principal
-     SENHA PADRÃO: altere VAL_PASS abaixo para personalizar
 ═══════════════════════════════════════════════════════════ -->
 <script>
 (function(){
-  /* ── SENHA (altere aqui para personalizar) ── */
-  var VAL_PASS = '@LucasInfante';
+  var VAL_HASH = 'd36b9d98f246896031c99bd372892783b3bb573d9a9a50303ce32a0173b73ef6';
   var VAL_SESS_KEY = 'val_auth_v1';
 
   /* ── Coluna Netcool por nome e posição-fallback ── */
@@ -3526,9 +3524,15 @@
   function isAuth(){ try { return sessionStorage.getItem(VAL_SESS_KEY)==='1'; } catch(e){ return false; } }
   function setAuth(v){ try { if(v) sessionStorage.setItem(VAL_SESS_KEY,'1'); else sessionStorage.removeItem(VAL_SESS_KEY); } catch(e){} }
 
-  window.valLogin = function(){
+  window.valLogin = async function(){
+    if(!crypto || !crypto.subtle){
+      document.getElementById('val-pw-err').textContent = 'Abra o arquivo diretamente no navegador (file://).';
+      return;
+    }
     var pw = document.getElementById('val-pw-input').value;
-    if(pw === VAL_PASS){
+    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+    var hex = Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+    if(hex === VAL_HASH){
       setAuth(true);
       document.getElementById('val-gate').style.display = 'none';
       document.getElementById('val-main').style.display = 'block';
