@@ -616,10 +616,10 @@
     <!-- Inputs -->
     <div class="val-inputs">
       <div>
-        <div class="val-col-label">BASE DE PALAVRAS-CHAVE</div>
-        <div class="val-col-hint">Uma palavra ou frase por linha. Se encontrada no AdditionalInfo da linha correspondente ao NE ID + END ID da TSK, classifica como ALARMADO.</div>
+        <div class="val-col-label">PALAVRAS-CHAVE ADICIONAIS <span style="font-weight:400;opacity:.6">(OPCIONAL)</span></div>
+        <div class="val-col-hint">A base de comparação é extraída automaticamente da <strong>nota de abertura</strong> de cada TSK (Summaries do Netcool registrados no histórico). Adicione aqui termos extras para ampliar a detecção de ALARMADO.</div>
         <textarea id="val-keywords" class="val-textarea" placeholder="Ex:&#10;alarm active&#10;link down&#10;CRITICAL&#10;NE unreachable" oninput="valCountKw()"></textarea>
-        <div class="val-count" id="val-kw-count">0 palavras-chave</div>
+        <div class="val-count" id="val-kw-count">0 palavras-chave adicionais</div>
       </div>
       <div>
         <div class="val-col-label">DADOS NETCOOL — COLE O EXPORT (TAB-SEPARADO)</div>
@@ -3614,6 +3614,36 @@
   }
 
   /* ── Classificação ── */
+  /* ── Extrai keywords da nota de abertura da TSK ── */
+  function extractNotaAberturaKeywords(motivoCancelamento){
+    if(!motivoCancelamento) return [];
+    var kws = {};
+    /*
+     * 1. Summaries dos system auto-notes: "Summary - TEXTO"
+     *    Para no próximo ",NE ID", num padrão de data "DD/MM/YYYY", ou fim de string.
+     *    Formato típico: "Summary - NR GNODEB DOWN LINK FAULT,NE ID - ..."
+     *                    "Summary - FANDEGRADE01/11/2026 06:00:08 - System..."
+     */
+    var reSum = /Summary\s*[-–]\s*([^\n,]+?)(?=,NE\s+ID|\d{2}\/\d{2}\/\d{4}|$)/gi;
+    var m;
+    while((m = reSum.exec(motivoCancelamento)) !== null){
+      var s = m[1].trim();
+      if(s.length > 2) kws[s.toLowerCase()] = true;
+    }
+    /* 2. Notas humanas: "FALHA: X" e "FACILIDADE: X" */
+    var reFalha = /FALHA:\s*([^\n,;]+)/gi;
+    while((m = reFalha.exec(motivoCancelamento)) !== null){
+      var f = m[1].trim();
+      if(f.length > 2) kws[f.toLowerCase()] = true;
+    }
+    var reFacil = /FACILIDADE:\s*([^\n,;]+)/gi;
+    while((m = reFacil.exec(motivoCancelamento)) !== null){
+      var fc = m[1].trim();
+      if(fc.length > 2) kws[fc.toLowerCase()] = true;
+    }
+    return Object.keys(kws).filter(function(k){ return k.length > 3; });
+  }
+
   function classificar(row, keywords){
     var supr = row.suprEsc.toLowerCase();
     if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
@@ -3673,7 +3703,8 @@
       html += '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.row.summary)+'">'+esc(r.row.summary||'—')+'</td>';
       html += '<td style="font-weight:'+(r.row.gravidade.toLowerCase()==='limpar'?'700':'400')+';color:'+(r.row.gravidade.toLowerCase()==='limpar'?'#2ecc71':'var(--fg)')+'">'+esc(r.row.gravidade||'—')+'</td>';
       html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.suprEsc||'—')+'</td>';
-      html += '<td class="val-addinfo" title="'+esc(r.row.addInfo)+'">'+highlight(r.row.addInfo.substring(0,200), r.keywords)+'</td>';
+      var titleAdd = esc(r.row.addInfo) + (r.autoKw && r.autoKw.length ? ' | NOTA: '+esc(r.autoKw.join(', ')) : '');
+      html += '<td class="val-addinfo" title="'+titleAdd+'">'+highlight(r.row.addInfo.substring(0,200), r.keywords)+'</td>';
       html += '<td>'+resBadge(r.resultado)+'</td>';
       html += '</tr>';
     });
@@ -3695,10 +3726,13 @@
       return;
     }
     _valRows = netcoolRows.map(function(row){
-      var resultado = classificar(row, keywords);
       var tsk = findTsk(row.endId);
-      if(!tsk) resultado = 'SEM TSK';
-      return { row: row, resultado: resultado, tsk: tsk, keywords: keywords };
+      if(!tsk) return { row: row, resultado: 'SEM TSK', tsk: null, keywords: keywords, autoKw: [] };
+      /* Combina keywords da nota de abertura + palavras manuais */
+      var autoKw = extractNotaAberturaKeywords((tsk.task||{}).motivoCancelamento);
+      var allKw = autoKw.concat(keywords);
+      var resultado = classificar(row, allKw);
+      return { row: row, resultado: resultado, tsk: tsk, keywords: allKw, autoKw: autoKw };
     });
     /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → ATIVO → SEM TSK */
     var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'ATIVO':4, 'SEM TSK':5 };
