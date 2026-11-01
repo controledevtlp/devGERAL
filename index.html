@@ -3819,7 +3819,7 @@
       var backlog = ((ST_G[c.id]||{}).cls||{}).backlog || [];
       backlog.forEach(function(t){
         if(!isStatusAtivo(t.status)) return;
-        if(t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual)) return;
+        if(tskShouldExclude(t)) return;
         tskList.push({ contract: c, task: t });
       });
     });
@@ -3876,12 +3876,20 @@
     renderTabela(btn.getAttribute('data-f'));
   };
 
-  /* ── Filas excluídas da base NE IDs ── */
+  /* ── Regras criadoras excluídas ── */
   var FILA_EXCLUIR = ['isoc','suporte','acesso','mabe','preditiva'];
 
-  function filaShouldExclude(fila){
-    var f = (fila||'').toLowerCase();
-    return FILA_EXCLUIR.some(function(k){ return f.indexOf(k) >= 0; });
+  function filaShouldExclude(s){
+    var v = (s||'').toLowerCase();
+    return FILA_EXCLUIR.some(function(k){ return v.indexOf(k) >= 0; });
+  }
+
+  /* Verifica TSK inteira: filaAtual + isocDJ (campo real da regra criadora) + statusSla */
+  function tskShouldExclude(t){
+    if((t.statusSla||'').toUpperCase() === 'PREDITIVA') return true;
+    if(filaShouldExclude(t.filaAtual)) return true;
+    if(filaShouldExclude(t.isocDJ)) return true;
+    return false;
   }
 
   window.valGerarNEIDs = function(contractId){
@@ -3902,11 +3910,9 @@
       totalTsks += backlog.length;
       labels.push(c.id.toUpperCase());
       backlog.forEach(function(t){
-        var excluded = t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual) || !isStatusAtivo(t.status);
-        if(!excluded && t.siteId){
-          eligibleCount++;
-          endIds.push(t.siteId.trim());
-        }
+        if(!isStatusAtivo(t.status) || tskShouldExclude(t) || !t.siteId) return;
+        eligibleCount++;
+        endIds.push(t.siteId.trim());
       });
     });
 
