@@ -598,7 +598,7 @@
     <!-- Gerar Base END IDs -->
     <div class="val-neid-section">
       <div class="val-col-label">GERAR BASE DE NE IDs — TSKs ATIVAS</div>
-      <div class="val-col-hint">Selecione o contrato para exportar todos os NE IDs das TSKs em aberto (excluindo filas ISOC / SUPORTE / ACESSO, MABE e PREDITIVA). Use a lista para filtrar o Netcool e gerar a base de normalizados.</div>
+      <div class="val-col-hint">Selecione o contrato para exportar todos os NE IDs das TSKs em aberto (excluindo regras criadoras MABE, SUPORTE e PREDITIVA). Use a lista para filtrar o Netcool e gerar a base de normalizados.</div>
       <div class="val-neid-btns">
         <button class="val-neid-btn val-neid-trj" onclick="valGerarNEIDs('trj')">TRJ</button>
         <button class="val-neid-btn val-neid-tmg" onclick="valGerarNEIDs('tmg')">TMG</button>
@@ -3881,7 +3881,7 @@
   };
 
   /* ── Regras criadoras excluídas ── */
-  var FILA_EXCLUIR = ['isoc','suporte','acesso','mabe','preditiva'];
+  var FILA_EXCLUIR = ['mabe','suporte','preditiva'];
 
   function filaShouldExclude(s){
     var v = (s||'').toLowerCase();
