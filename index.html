@@ -3665,11 +3665,11 @@
     return s === 'NAO INICIADO' || s === 'INICIADO';
   }
 
-  /* Score de correspondência entre uma linha Netcool e keywords (0 = nenhuma) */
+  /* Score de correspondência entre uma linha Netcool e keywords (0 = nenhuma).
+     Verifica AdditionalInfo, Node e AlarmedResource — NÃO usa Summary (título genérico do alarme). */
   function scoreRow(row, keywords){
     if(!keywords.length) return 0;
     var combined = [
-      (row.summary||'').toLowerCase(),
       (row.addInfo||'').toLowerCase(),
       (row.node||'').toLowerCase(),
       (row.alarmedRes||'').toLowerCase()
