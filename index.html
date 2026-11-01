@@ -3624,11 +3624,15 @@
     return null;
   }
 
-  /* ── Parse de data Netcool (BR: DD/MM/YYYY HH:MM:SS) ── */
+  /* ── Parse de data Netcool (DD/MM/YY ou DD/MM/YYYY HH:MM:SS) ── */
   function parseNetcoolDate(str){
     if(!str) return null;
-    var m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
-    if(m) return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +m[6]);
+    var m = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if(m){
+      var yr = +m[3];
+      if(yr < 100) yr += 2000;
+      return new Date(yr, +m[2]-1, +m[1], +m[4], +m[5], +m[6]);
+    }
     var d = new Date(str);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -3689,30 +3693,38 @@
 
   /* Classifica uma TSK com base em TODAS as linhas Netcool do seu NE */
   function classificarTsk(ncRows, keywords){
-    /* NE não encontrado no Netcool */
     if(!ncRows.length) return 'NORMALIZADO';
-    /* 1. ALARME PRESO — qualquer linha */
-    for(var i=0; i<ncRows.length; i++){
-      var supr = (ncRows[i].suprEsc||'').toLowerCase();
+
+    /* Separa alarmes ativos (Gravidade != "Limpar") dos limpos */
+    var activeRows = ncRows.filter(function(r){
+      return (r.gravidade||'').toLowerCase().trim() !== 'limpar';
+    });
+
+    /* Todos os alarmes do NE estão limpos → NORMALIZADO */
+    if(!activeRows.length) return 'NORMALIZADO';
+
+    /* 1. ALARME PRESO — linhas ativas */
+    for(var i=0; i<activeRows.length; i++){
+      var supr = (activeRows[i].suprEsc||'').toLowerCase();
       if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
         return 'ALARME PRESO';
       }
     }
-    /* 2. INTERMITENTE — qualquer linha com Tally > 15 E última ocorrência < 2h */
-    for(var i=0; i<ncRows.length; i++){
-      var tally = parseInt(ncRows[i].tally, 10);
+    /* 2. INTERMITENTE — Tally > 15 E última ocorrência < 2h (linhas ativas) */
+    for(var i=0; i<activeRows.length; i++){
+      var tally = parseInt(activeRows[i].tally, 10);
       if(!isNaN(tally) && tally > 15){
-        var lastOcc = parseNetcoolDate(ncRows[i].lastOcc);
+        var lastOcc = parseNetcoolDate(activeRows[i].lastOcc);
         if(lastOcc && (Date.now() - lastOcc.getTime()) < 2 * 60 * 60 * 1000){
           return 'INTERMITENTE';
         }
       }
     }
-    /* 3–5. Correlação: melhor score entre todas as linhas */
+    /* 3–5. Correlação de keywords (linhas ativas) */
     if(!keywords.length) return 'ATIVO';
     var maxMatched = 0;
-    for(var i=0; i<ncRows.length; i++){
-      var s = scoreRow(ncRows[i], keywords);
+    for(var i=0; i<activeRows.length; i++){
+      var s = scoreRow(activeRows[i], keywords);
       if(s > maxMatched) maxMatched = s;
     }
     if(maxMatched === 0) return 'NORMALIZADO';
