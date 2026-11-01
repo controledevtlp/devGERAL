@@ -3673,26 +3673,25 @@
         return 'INTERMITENTE';
       }
     }
-    /* 3. ALARMADO — busca "se contém" em Summary (D), AdditionalInfo (G), Node (V), AlarmedResource (Y) */
-    if(keywords.length){
-      var cols = [
-        (row.summary||'').toLowerCase(),
-        (row.addInfo||'').toLowerCase(),
-        (row.node||'').toLowerCase(),
-        (row.alarmedRes||'').toLowerCase()
-      ];
-      var combined = cols.join('\x00');
-      var achou = false;
-      for(var k=0; k<keywords.length; k++){
-        var kw = keywords[k].toLowerCase().trim();
-        if(kw && combined.indexOf(kw) >= 0){ achou = true; break; }
-      }
-      if(achou) return 'ALARMADO';
+    /* 3–5. Correlação por keywords nas colunas D / G / V / Y */
+    if(!keywords.length) return 'ATIVO'; /* sem keywords, não é possível correlacionar */
+    var cols = [
+      (row.summary||'').toLowerCase(),
+      (row.addInfo||'').toLowerCase(),
+      (row.node||'').toLowerCase(),
+      (row.alarmedRes||'').toLowerCase()
+    ];
+    var combined = cols.join('\x00');
+    var matched = 0;
+    for(var k=0; k<keywords.length; k++){
+      var kw = keywords[k].toLowerCase().trim();
+      if(kw && combined.indexOf(kw) >= 0) matched++;
     }
-    /* 4. NORMALIZADO — Gravidade Limpar/Clear */
-    var grav = (row.gravidade||'').toLowerCase().trim();
-    if(grav === 'limpar' || grav === 'clear' || grav === 'cleared') return 'NORMALIZADO';
-    /* 5. ATIVO */
+    /* Nenhuma keyword encontrada → NORMALIZADO */
+    if(matched === 0) return 'NORMALIZADO';
+    /* Maioria encontrada (≥ 50%) → ALARMADO */
+    if(matched / keywords.length >= 0.5) return 'ALARMADO';
+    /* Correspondência parcial — sinal presente mas fraco */
     return 'ATIVO';
   }
 
