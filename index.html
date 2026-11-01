@@ -1271,7 +1271,7 @@
     var gmgFila = tickets.filter(function(t){ return isBacklogSt(t) && isGmg(t); }).length;
 
     return {
-      backlogTotal:backlog.length, foraSla:foraSla, preditiva:preditiva, predBl:predBl,
+      backlogTotal:backlog.length - predBl, foraSla:foraSla, preditiva:preditiva, predBl:predBl,
       dentroBl:dentroBl, backlogIndef:indef,
       prodTotal:concl.length, prodDentro:encDen, prodFora:encFor,
       encBase:encBase, slaGeral:slaGeral, sitesForaAtivos:sitesForaAtivos,
@@ -3748,12 +3748,15 @@
       : CONTRACTS_G.filter(function(c){ return c.id === contractId; });
 
     var labels = [];
+    var eligibleCount = 0;
     targets.forEach(function(c){
       var backlog = ((ST_G[c.id]||{}).cls||{}).backlog || [];
       totalTsks += backlog.length;
       labels.push(c.id.toUpperCase());
       backlog.forEach(function(t){
-        if(!filaShouldExclude(t.filaAtual) && t.siteId){
+        var isPred = t.statusSla === 'PREDITIVA' || filaShouldExclude(t.filaAtual);
+        if(!isPred && t.siteId){
+          eligibleCount++;
           endIds.push(t.siteId.trim());
         }
       });
@@ -3767,7 +3770,7 @@
 
     document.getElementById('val-neid-output').value = lista;
     document.getElementById('val-neid-info').textContent =
-      labels.join(' + ')+' — '+unique.length+' NE IDs únicos exportados ('+totalTsks+' TSKs no backlog, excluindo ISOC/SUPORTE/ACESSO, MABE, PREDITIVA)';
+      labels.join(' + ')+' — '+unique.length+' NE IDs únicos exportados ('+eligibleCount+' TSKs elegíveis de '+totalTsks+' no backlog, excluindo ISOC/SUPORTE/ACESSO, MABE, PREDITIVA)';
     document.getElementById('val-neid-result').style.display = 'block';
   };
 
