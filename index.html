@@ -319,6 +319,71 @@
       .g-matrix { font-size: 11px; }
       .g-matrix th, .g-matrix td { padding: 8px 8px; }
     }
+    /* ── Validação Netcool ── */
+    .val-gate-wrap { display:flex; align-items:center; justify-content:center; min-height:340px; }
+    .val-gate-box { background:var(--card); border:1px solid var(--border2); border-radius:16px; padding:40px 48px; text-align:center; max-width:380px; width:100%; }
+    .val-gate-icon { font-size:36px; margin-bottom:12px; opacity:.7; }
+    .val-gate-title { font-family:'Sora',sans-serif; font-size:15px; font-weight:800; letter-spacing:2px; margin-bottom:6px; }
+    .val-gate-sub { font-size:12px; color:var(--muted); margin-bottom:24px; }
+    .val-pw-row { display:flex; gap:8px; }
+    .val-pw-input { flex:1; background:var(--input,rgba(255,255,255,.06)); border:1px solid var(--border2); border-radius:8px; padding:10px 14px; color:var(--fg); font-size:13px; outline:none; }
+    .val-pw-input:focus { border-color:var(--primary); }
+    .val-pw-btn { background:var(--primary); border:none; border-radius:8px; padding:10px 20px; color:#fff; font-size:12px; font-weight:700; letter-spacing:1px; cursor:pointer; }
+    .val-pw-btn:hover { opacity:.88; }
+    .val-pw-err { font-size:11px; color:#e74c3c; margin-top:8px; min-height:16px; }
+    .val-hdr-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .val-hdr-title { font-family:'Sora',sans-serif; font-size:13px; font-weight:800; letter-spacing:2px; }
+    .val-logout { background:rgba(255,255,255,.06); border:1px solid var(--border2); border-radius:8px; padding:5px 14px; color:var(--muted); font-size:11px; letter-spacing:1px; cursor:pointer; }
+    .val-logout:hover { color:var(--fg); }
+    .val-inputs { display:grid; grid-template-columns:1fr 1.6fr; gap:16px; margin-bottom:16px; }
+    @media (max-width:700px) { .val-inputs { grid-template-columns:1fr; } }
+    .val-col-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin-bottom:4px; }
+    .val-col-hint { font-size:11px; color:var(--muted); opacity:.7; margin-bottom:8px; line-height:1.5; }
+    .val-textarea { width:100%; height:140px; background:var(--input,rgba(255,255,255,.05)); border:1px solid var(--border2); border-radius:10px; padding:10px 12px; color:var(--fg); font-size:11px; font-family:'Courier New',monospace; resize:vertical; outline:none; box-sizing:border-box; }
+    .val-textarea:focus { border-color:var(--primary); }
+    .val-count { font-size:10px; color:var(--muted); margin-top:4px; }
+    .val-btn-validate { background:var(--primary); border:none; border-radius:10px; padding:12px 36px; color:#fff; font-size:12px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:opacity .15s; }
+    .val-btn-validate:hover { opacity:.88; }
+    .val-summary-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .val-badge { padding:6px 18px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:1.5px; }
+    .val-badge-norm { background:rgba(26,122,64,.18); color:#2ecc71; border:1px solid rgba(26,122,64,.3); }
+    .val-badge-alarm { background:rgba(192,0,0,.15); color:#e74c3c; border:1px solid rgba(192,0,0,.3); }
+    .val-badge-preso { background:rgba(245,177,17,.12); color:#f39c12; border:1px solid rgba(245,177,17,.3); }
+    .val-badge-ativo { background:rgba(255,255,255,.07); color:var(--muted); border:1px solid var(--border2); }
+    .val-badge-sem { background:rgba(255,255,255,.04); color:var(--muted); border:1px dashed var(--border2); }
+    .val-filter-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    .val-filter-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin-right:4px; }
+    .val-filter-btn { background:rgba(255,255,255,.05); border:1px solid var(--border2); border-radius:6px; padding:4px 12px; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); cursor:pointer; }
+    .val-filter-btn:hover, .val-filter-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .val-table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border2); }
+    .val-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .val-table th { background:var(--card2,rgba(255,255,255,.06)); color:var(--muted); font-size:10px; letter-spacing:1px; font-weight:700; padding:9px 12px; text-align:left; border-bottom:1px solid var(--border2); white-space:nowrap; }
+    .val-table td { padding:8px 12px; border-bottom:1px solid var(--border2); color:var(--fg); vertical-align:top; }
+    .val-table tr:last-child td { border-bottom:none; }
+    .val-table tr:hover td { background:rgba(255,255,255,.03); }
+    .val-res { display:inline-block; padding:3px 10px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:1px; white-space:nowrap; }
+    .val-res-norm  { background:rgba(26,122,64,.18);  color:#2ecc71; }
+    .val-res-alarm { background:rgba(192,0,0,.15);    color:#e74c3c; }
+    .val-res-preso { background:rgba(245,177,17,.12); color:#f39c12; }
+    .val-res-ativo { background:rgba(255,255,255,.07); color:var(--muted); }
+    .val-res-sem   { background:rgba(255,255,255,.04); color:var(--muted); font-style:italic; }
+    .val-addinfo { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); cursor:pointer; }
+    .val-addinfo:hover { white-space:normal; overflow:visible; }
+    .val-highlight { background:rgba(243,156,18,.25); border-radius:2px; padding:0 2px; }
+    /* ── Gerar base NE IDs ── */
+    .val-neid-section { background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin-bottom:20px; }
+    .val-neid-btns { display:flex; gap:8px; margin:10px 0 12px; flex-wrap:wrap; }
+    .val-neid-btn { padding:8px 22px; border:none; border-radius:5px; font:700 11px/1 'Roboto Mono',monospace,sans-serif; cursor:pointer; letter-spacing:.08em; transition:opacity .15s; }
+    .val-neid-btn:hover { opacity:.8; }
+    .val-neid-trj { background:#FF8C00; color:#fff; }
+    .val-neid-tmg { background:#3498DB; color:#fff; }
+    .val-neid-tne { background:#2ECC71; color:#1a1a1a; }
+    .val-neid-todos { background:rgba(255,255,255,.12); color:var(--fg); border:1px solid var(--border) !important; }
+    .val-neid-info { font-size:11px; color:var(--muted); margin-bottom:6px; }
+    .val-textarea-sm { height:130px; font-family:'Roboto Mono',monospace,sans-serif; font-size:11px; letter-spacing:.02em; margin-bottom:8px; }
+    .val-neid-copy { background:var(--accent); color:#fff; border:none; padding:7px 18px; border-radius:4px; font:700 10px/1 var(--font); cursor:pointer; letter-spacing:.06em; }
+    .val-neid-copy:hover { opacity:.85; }
+    .val-divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
   </style>
 </head>
 <body>
@@ -369,6 +434,9 @@
   </button>
   <button id="btn-upd" class="g-tab-btn" onclick="switchTab('upd')">
     <span class="g-tab-dot"></span>Atualizações
+  </button>
+  <button id="btn-val" class="g-tab-btn" onclick="switchTab('val')" style="border-left:1px solid var(--border);margin-left:8px;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 256 256" fill="currentColor" style="vertical-align:-1px;margin-right:4px;opacity:.7"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-80-48a8,8,0,1,0-8-8A8,8,0,0,0,128,160Z"/></svg>VALIDAÇÃO
   </button>
 </nav>
 
@@ -495,6 +563,105 @@
 </div>
 </div>
 
+<!-- TAB 7 — VALIDAÇÃO NETCOOL -->
+<div id="tab-val" class="g-tab-pane">
+<div class="g-main">
+
+  <!-- GATE (não autenticado) -->
+  <div id="val-gate" class="val-gate-wrap">
+    <div class="val-gate-box">
+      <div class="val-gate-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 256 256" fill="currentColor"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-80-48a8,8,0,1,0-8-8A8,8,0,0,0,128,160Z"/></svg>
+      </div>
+      <div class="val-gate-title">VALIDAÇÃO NETCOOL</div>
+      <div class="val-gate-sub">Área restrita — validação de normalização de alarmes<br>em cruzamento com TSKs ativas dos 3 contratos</div>
+      <div class="val-pw-row">
+        <input id="val-pw-input" class="val-pw-input" type="password" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')valLogin()">
+        <button class="val-pw-btn" onclick="valLogin()">ENTRAR</button>
+      </div>
+      <div id="val-pw-err" class="val-pw-err"></div>
+    </div>
+  </div>
+
+  <!-- CONTEÚDO PRINCIPAL (autenticado) -->
+  <div id="val-main" style="display:none">
+
+    <!-- Header -->
+    <div class="val-hdr-bar">
+      <div class="val-hdr-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" fill="currentColor" style="vertical-align:-1px;margin-right:5px;opacity:.6"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Zm-80-48a8,8,0,1,0-8-8A8,8,0,0,0,128,160Z"/></svg>
+        VALIDAÇÃO DE NORMALIZAÇÃO — NETCOOL
+      </div>
+      <button class="val-logout" onclick="valLogout()">SAIR</button>
+    </div>
+
+    <!-- Gerar Base END IDs -->
+    <div class="val-neid-section">
+      <div class="val-col-label">GERAR BASE DE NE IDs — TSKs ATIVAS</div>
+      <div class="val-col-hint">Selecione o contrato para exportar todos os NE IDs das TSKs em aberto (excluindo filas ISOC / SUPORTE / ACESSO, MABE e PREDITIVA). Use a lista para filtrar o Netcool e gerar a base de normalizados.</div>
+      <div class="val-neid-btns">
+        <button class="val-neid-btn val-neid-trj" onclick="valGerarNEIDs('trj')">TRJ</button>
+        <button class="val-neid-btn val-neid-tmg" onclick="valGerarNEIDs('tmg')">TMG</button>
+        <button class="val-neid-btn val-neid-tne" onclick="valGerarNEIDs('tne')">TNE</button>
+        <button class="val-neid-btn val-neid-todos" onclick="valGerarNEIDs('todos')">TODOS</button>
+      </div>
+      <div id="val-neid-result" style="display:none">
+        <div class="val-neid-info" id="val-neid-info"></div>
+        <textarea id="val-neid-output" class="val-textarea val-textarea-sm" readonly></textarea>
+        <button class="val-neid-copy" onclick="valCopyNEIDs()">COPIAR LISTA</button>
+      </div>
+    </div>
+    <hr class="val-divider">
+
+    <!-- Inputs -->
+    <div class="val-inputs">
+      <div>
+        <div class="val-col-label">BASE DE PALAVRAS-CHAVE</div>
+        <div class="val-col-hint">Uma palavra ou frase por linha. Se encontrada no AdditionalInfo da linha correspondente ao NE ID + END ID da TSK, classifica como ALARMADO.</div>
+        <textarea id="val-keywords" class="val-textarea" placeholder="Ex:&#10;alarm active&#10;link down&#10;CRITICAL&#10;NE unreachable" oninput="valCountKw()"></textarea>
+        <div class="val-count" id="val-kw-count">0 palavras-chave</div>
+      </div>
+      <div>
+        <div class="val-col-label">DADOS NETCOOL — COLE O EXPORT (TAB-SEPARADO)</div>
+        <div class="val-col-hint">A primeira linha deve conter os cabeçalhos. Campos utilizados: <strong>NEName</strong> (col C), <strong>Summary</strong> (col D), <strong>AdditionalInfo</strong> (col G), <strong>Gravidade</strong> (col O), <strong>SuprEsc</strong> (col R), <strong>ictAddressID</strong> (col X).</div>
+        <textarea id="val-data" class="val-textarea" placeholder="NEName&#9;...&#9;Summary&#9;...&#9;AdditionalInfo&#9;...&#9;Gravidade&#9;...&#9;SuprEsc&#9;...&#9;ictAddressID&#9;..." oninput="valCountData()"></textarea>
+        <div class="val-count" id="val-data-count">0 linhas</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:24px">
+      <button class="val-btn-validate" onclick="valValidar()">VALIDAR ALARMES</button>
+    </div>
+
+    <!-- Resultados -->
+    <div id="val-results" style="display:none">
+      <div class="val-summary-row" id="val-summary"></div>
+      <div class="val-filter-row">
+        <span class="val-filter-label">FILTRAR:</span>
+        <button class="val-filter-btn active" data-f="todos" onclick="valFiltrar(this)">TODOS</button>
+        <button class="val-filter-btn" data-f="NORMALIZADO" onclick="valFiltrar(this)">NORMALIZADO</button>
+        <button class="val-filter-btn" data-f="ALARMADO" onclick="valFiltrar(this)">ALARMADO</button>
+        <button class="val-filter-btn" data-f="ALARME PRESO" onclick="valFiltrar(this)">ALARME PRESO</button>
+        <button class="val-filter-btn" data-f="ATIVO" onclick="valFiltrar(this)">ATIVO</button>
+        <button class="val-filter-btn" data-f="SEM TSK" onclick="valFiltrar(this)">SEM TSK</button>
+      </div>
+      <div class="val-table-wrap">
+        <table class="val-table">
+          <thead>
+            <tr>
+              <th>CONTRATO</th><th>TSK</th><th>END ID</th><th>NE ID</th>
+              <th>SUMMARY</th><th>GRAVIDADE</th><th>SUPR/ESC</th>
+              <th>ADDITIONAL INFO</th><th>RESULTADO</th>
+            </tr>
+          </thead>
+          <tbody id="val-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /val-main -->
+</div>
+</div>
 
 </div><!-- /g-wrap -->
 
@@ -3295,6 +3462,8 @@
     }
   }
 
+  window.CONTRACTS          = CONTRACTS;
+  window.ST                 = ST;
   window.switchTab          = switchTab;
   window.loadAll            = loadAll;
   window.setContractFilter  = setContractFilter;
@@ -3321,6 +3490,307 @@
   renderFilterButtons();
   renderHeroKpis();
   loadAll();
+
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     VALIDAÇÃO NETCOOL — lógica independente do IIFE principal
+     SENHA PADRÃO: altere VAL_PASS abaixo para personalizar
+═══════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  /* ── SENHA (altere aqui para personalizar) ── */
+  var VAL_PASS = '@LucasInfante';
+  var VAL_SESS_KEY = 'val_auth_v1';
+
+  /* ── Coluna Netcool por nome e posição-fallback ── */
+  var NC_COLS = [
+    { key:'neId',     name:'NEName',        fallback:2  },
+    { key:'summary',  name:'Summary',       fallback:3  },
+    { key:'addInfo',  name:'AdditionalInfo',fallback:6  },
+    { key:'gravidade',name:'Gravidade',     fallback:14 },
+    { key:'suprEsc',  name:'SuprEsc',       fallback:17 },
+    { key:'endId',    name:'ictAddressID',  fallback:23 }
+  ];
+
+  /* ── Dados da última validação ── */
+  var _valRows = [];
+
+  /* ── Auth ── */
+  function isAuth(){ try { return sessionStorage.getItem(VAL_SESS_KEY)==='1'; } catch(e){ return false; } }
+  function setAuth(v){ try { if(v) sessionStorage.setItem(VAL_SESS_KEY,'1'); else sessionStorage.removeItem(VAL_SESS_KEY); } catch(e){} }
+
+  window.valLogin = function(){
+    var pw = document.getElementById('val-pw-input').value;
+    if(pw === VAL_PASS){
+      setAuth(true);
+      document.getElementById('val-gate').style.display = 'none';
+      document.getElementById('val-main').style.display = 'block';
+      document.getElementById('val-pw-err').textContent = '';
+      document.getElementById('val-pw-input').value = '';
+    } else {
+      document.getElementById('val-pw-err').textContent = 'Senha incorreta.';
+    }
+  };
+
+  window.valLogout = function(){
+    setAuth(false);
+    document.getElementById('val-gate').style.display = '';
+    document.getElementById('val-main').style.display = 'none';
+    document.getElementById('val-results').style.display = 'none';
+    _valRows = [];
+  };
+
+  /* Ao abrir a aba, verifica sessão */
+  var _origSwitch = window.switchTab;
+  window.switchTab = function(id){
+    _origSwitch(id);
+    if(id === 'val'){
+      if(isAuth()){
+        document.getElementById('val-gate').style.display = 'none';
+        document.getElementById('val-main').style.display = 'block';
+      }
+    }
+  };
+
+  /* ── Contadores ── */
+  window.valCountKw = function(){
+    var txt = (document.getElementById('val-keywords').value||'').trim();
+    var n = txt ? txt.split('\n').filter(function(l){ return l.trim(); }).length : 0;
+    document.getElementById('val-kw-count').textContent = n + (n===1?' palavra-chave':' palavras-chave');
+  };
+  window.valCountData = function(){
+    var txt = (document.getElementById('val-data').value||'').trim();
+    var n = txt ? Math.max(0, txt.split('\n').length - 1) : 0; // -1 para header
+    document.getElementById('val-data-count').textContent = n + (n===1?' linha':' linhas');
+  };
+
+  /* ── Parser Netcool ── */
+  function parseNetcool(raw){
+    var lines = raw.replace(/\r/g,'').split('\n');
+    if(lines.length < 2) return [];
+    var headers = lines[0].split('\t').map(function(h){ return h.trim(); });
+    /* mapear colunas por nome ou fallback posicional */
+    var colIdx = {};
+    NC_COLS.forEach(function(c){
+      var i = -1;
+      for(var h=0; h<headers.length; h++){
+        if(headers[h].toLowerCase() === c.name.toLowerCase()){ i=h; break; }
+      }
+      colIdx[c.key] = i >= 0 ? i : c.fallback;
+    });
+    function get(cells, k){ var i=colIdx[k]; return i>=0&&i<cells.length?cells[i].trim():''; }
+    var rows = [];
+    for(var li=1; li<lines.length; li++){
+      var line = lines[li];
+      if(!line.trim()) continue;
+      var cells = line.split('\t');
+      var r = {};
+      NC_COLS.forEach(function(c){ r[c.key] = get(cells, c.key); });
+      r._raw = line;
+      rows.push(r);
+    }
+    return rows;
+  }
+
+  /* ── Busca TSK no devGERAL por END ID ── */
+  function findTsk(endId){
+    if(!endId) return null;
+    var eUp = endId.toUpperCase().trim();
+    var CONTRACTS_G = window.CONTRACTS || [];
+    var ST_G = window.ST || {};
+    for(var ci=0; ci<CONTRACTS_G.length; ci++){
+      var c = CONTRACTS_G[ci];
+      var backlog = ((ST_G[c.id]||{}).cls||{}).backlog||[];
+      for(var ti=0; ti<backlog.length; ti++){
+        var t = backlog[ti];
+        if((t.enderecoId||'').toUpperCase().trim() === eUp){
+          return { contract: c, task: t };
+        }
+      }
+    }
+    return null;
+  }
+
+  /* ── Classificação ── */
+  function classificar(row, keywords){
+    var supr = row.suprEsc.toLowerCase();
+    if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
+      return 'ALARME PRESO';
+    }
+    var addInfo = row.addInfo.toLowerCase();
+    var achou = false;
+    for(var k=0; k<keywords.length; k++){
+      var kw = keywords[k].toLowerCase().trim();
+      if(kw && addInfo.indexOf(kw) >= 0){ achou = true; break; }
+    }
+    if(achou) return 'ALARMADO';
+    var grav = row.gravidade.toLowerCase().trim();
+    if(grav === 'limpar' || grav === 'clear' || grav === 'cleared') return 'NORMALIZADO';
+    return 'ATIVO';
+  }
+
+  /* ── Escaping HTML ── */
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── Highlight keywords no texto ── */
+  function highlight(text, keywords){
+    if(!keywords.length) return esc(text);
+    var safe = esc(text);
+    keywords.forEach(function(kw){
+      if(!kw.trim()) return;
+      var re = new RegExp('('+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+      safe = safe.replace(re,'<span class="val-highlight">$1</span>');
+    });
+    return safe;
+  }
+
+  /* ── Badge de resultado ── */
+  function resBadge(r){
+    var cls = r==='NORMALIZADO'?'norm': r==='ALARMADO'?'alarm': r==='ALARME PRESO'?'preso': r==='SEM TSK'?'sem':'ativo';
+    return '<span class="val-res val-res-'+cls+'">'+esc(r)+'</span>';
+  }
+
+  /* ── Renderizar tabela (com filtro) ── */
+  function renderTabela(filtro){
+    var rows = filtro === 'todos' ? _valRows : _valRows.filter(function(r){ return r.resultado === filtro; });
+    var tbody = document.getElementById('val-tbody');
+    if(!tbody) return;
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhum resultado para o filtro selecionado.</td></tr>';
+      return;
+    }
+    var html = '';
+    rows.forEach(function(r){
+      var tskCell = r.tsk ? esc(r.tsk.task.osNumero||r.tsk.task.enderecoId||'—') : '<span style="color:var(--muted);font-style:italic">—</span>';
+      var contrCell = r.tsk ? esc(r.tsk.contract.name) : '<span style="color:var(--muted)">—</span>';
+      html += '<tr data-res="'+esc(r.resultado)+'">';
+      html += '<td>'+contrCell+'</td>';
+      html += '<td>'+tskCell+'</td>';
+      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.endId||'—')+'</td>';
+      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.neId||'—')+'</td>';
+      html += '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.row.summary)+'">'+esc(r.row.summary||'—')+'</td>';
+      html += '<td style="font-weight:'+(r.row.gravidade.toLowerCase()==='limpar'?'700':'400')+';color:'+(r.row.gravidade.toLowerCase()==='limpar'?'#2ecc71':'var(--fg)')+'">'+esc(r.row.gravidade||'—')+'</td>';
+      html += '<td style="font-size:10px;color:var(--muted)">'+esc(r.row.suprEsc||'—')+'</td>';
+      html += '<td class="val-addinfo" title="'+esc(r.row.addInfo)+'">'+highlight(r.row.addInfo.substring(0,200), r.keywords)+'</td>';
+      html += '<td>'+resBadge(r.resultado)+'</td>';
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  /* ── Validar ── */
+  window.valValidar = function(){
+    var rawKw = document.getElementById('val-keywords').value || '';
+    var rawData = document.getElementById('val-data').value || '';
+    if(!rawData.trim()){
+      alert('Cole os dados do Netcool antes de validar.');
+      return;
+    }
+    var keywords = rawKw.split('\n').map(function(k){ return k.trim(); }).filter(function(k){ return k; });
+    var netcoolRows = parseNetcool(rawData);
+    if(!netcoolRows.length){
+      alert('Nenhuma linha de dado encontrada. Verifique se a primeira linha tem os cabeçalhos.');
+      return;
+    }
+    _valRows = netcoolRows.map(function(row){
+      var resultado = classificar(row, keywords);
+      var tsk = findTsk(row.endId);
+      if(!tsk) resultado = 'SEM TSK';
+      return { row: row, resultado: resultado, tsk: tsk, keywords: keywords };
+    });
+    /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → ATIVO → SEM TSK */
+    var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'ATIVO':4, 'SEM TSK':5 };
+    _valRows.sort(function(a,b){ return (ORD[a.resultado]||9)-(ORD[b.resultado]||9); });
+    /* Contagens */
+    var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, ATIVO:0, 'SEM TSK':0 };
+    _valRows.forEach(function(r){ if(counts[r.resultado]!==undefined) counts[r.resultado]++; });
+    /* Summary */
+    var sumHtml = '';
+    sumHtml += '<div class="val-badge val-badge-norm">'+counts.NORMALIZADO+' NORMALIZADO</div>';
+    sumHtml += '<div class="val-badge val-badge-alarm">'+counts.ALARMADO+' ALARMADO</div>';
+    sumHtml += '<div class="val-badge val-badge-preso">'+counts['ALARME PRESO']+' ALARME PRESO</div>';
+    sumHtml += '<div class="val-badge val-badge-ativo">'+counts.ATIVO+' ATIVO</div>';
+    sumHtml += '<div class="val-badge val-badge-sem">'+counts['SEM TSK']+' SEM TSK</div>';
+    document.getElementById('val-summary').innerHTML = sumHtml;
+    /* Resetar filtro para "todos" */
+    document.querySelectorAll('.val-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+    var btnTodos = document.querySelector('.val-filter-btn[data-f="todos"]');
+    if(btnTodos) btnTodos.classList.add('active');
+    renderTabela('todos');
+    document.getElementById('val-results').style.display = 'block';
+  };
+
+  /* ── Filtrar ── */
+  window.valFiltrar = function(btn){
+    document.querySelectorAll('.val-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    renderTabela(btn.getAttribute('data-f'));
+  };
+
+  /* ── Filas excluídas da base NE IDs ── */
+  var FILA_EXCLUIR = ['isoc','suporte','acesso','mabe','preditiva'];
+
+  function filaShouldExclude(fila){
+    var f = (fila||'').toLowerCase();
+    return FILA_EXCLUIR.some(function(k){ return f.indexOf(k) >= 0; });
+  }
+
+  window.valGerarNEIDs = function(contractId){
+    var ST_G = window.ST || {};
+    var CONTRACTS_G = window.CONTRACTS || [];
+    var endIds = [];
+    var totalTsks = 0;
+
+    var targets = contractId === 'todos'
+      ? CONTRACTS_G
+      : CONTRACTS_G.filter(function(c){ return c.id === contractId; });
+
+    var labels = [];
+    targets.forEach(function(c){
+      var backlog = ((ST_G[c.id]||{}).cls||{}).backlog || [];
+      totalTsks += backlog.length;
+      labels.push(c.id.toUpperCase());
+      backlog.forEach(function(t){
+        if(!filaShouldExclude(t.filaAtual) && t.siteId){
+          endIds.push(t.siteId.trim());
+        }
+      });
+    });
+
+    /* Deduplicar e ordenar */
+    var unique = endIds.filter(function(v,i,a){ return a.indexOf(v)===i && v; });
+    unique.sort();
+
+    var lista = unique.map(function(id){ return ';\t'+id; }).join('\n');
+
+    document.getElementById('val-neid-output').value = lista;
+    document.getElementById('val-neid-info').textContent =
+      labels.join(' + ')+' — '+unique.length+' NE IDs únicos exportados ('+totalTsks+' TSKs no backlog, excluindo ISOC/SUPORTE/ACESSO, MABE, PREDITIVA)';
+    document.getElementById('val-neid-result').style.display = 'block';
+  };
+
+  window.valCopyNEIDs = function(){
+    var ta = document.getElementById('val-neid-output');
+    var btn = document.querySelector('.val-neid-copy');
+    var orig = btn.textContent;
+    try {
+      navigator.clipboard.writeText(ta.value).then(function(){
+        btn.textContent = 'COPIADO!'; setTimeout(function(){ btn.textContent=orig; },1800);
+      });
+    } catch(e){
+      ta.select(); try { document.execCommand('copy'); } catch(e2){}
+      btn.textContent = 'COPIADO!'; setTimeout(function(){ btn.textContent=orig; },1800);
+    }
+  };
+
+  /* Verificar se já está autenticado ao carregar */
+  if(isAuth()){
+    var gate = document.getElementById('val-gate');
+    var main = document.getElementById('val-main');
+    if(gate && main){ gate.style.display='none'; main.style.display='block'; }
+  }
 
 })();
 </script>
