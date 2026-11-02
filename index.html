@@ -352,6 +352,11 @@
     .val-badge-ativo { background:rgba(255,255,255,.07); color:var(--muted); border:1px solid var(--border2); }
     .val-badge-inter { background:rgba(155,89,182,.12); color:#bb8fce; border:1px solid rgba(155,89,182,.3); }
     .val-badge-verif { background:rgba(255,165,0,.12); color:#ffa500; border:1px solid rgba(255,165,0,.3); }
+    .val-badge-antigo { background:rgba(52,152,219,.12); color:#5dade2; border:1px solid rgba(52,152,219,.3); }
+    .val-res-antigo { background:rgba(52,152,219,.12); color:#5dade2; border:1px solid rgba(52,152,219,.3); }
+    .val-copy-wa-btn { margin-left:auto; padding:5px 14px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:1px; cursor:pointer; border:1px solid rgba(37,211,102,.4); background:rgba(37,211,102,.1); color:#25d366; transition:background .2s; }
+    .val-copy-wa-btn:hover { background:rgba(37,211,102,.2); }
+    .val-copy-wa-btn.copied { background:rgba(37,211,102,.25); color:#1ebe5d; }
     .val-filter-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
     .val-filter-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin-right:4px; }
     .val-filter-btn { background:rgba(255,255,255,.05); border:1px solid var(--border2); border-radius:6px; padding:4px 12px; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); cursor:pointer; }
@@ -647,7 +652,9 @@
         <button class="val-filter-btn" data-f="ATIVO" onclick="valFiltrar(this)">ATIVO</button>
         <button class="val-filter-btn" data-f="INTERMITENTE" onclick="valFiltrar(this)">INTERMITENTE</button>
         <button class="val-filter-btn" data-f="VERIFICAR ALARME PRESO" onclick="valFiltrar(this)">VERIFICAR ALARME PRESO</button>
+        <button class="val-filter-btn" data-f="ALARME ANTIGO" onclick="valFiltrar(this)">ALARME ANTIGO</button>
         <button class="val-filter-btn" data-f="gravidade" onclick="valFiltrar(this)">GRAVIDADE</button>
+        <button class="val-copy-wa-btn" id="val-copy-wa" onclick="valCopiarWA()" title="Copiar lista para WhatsApp">COPIAR PARA WHATSAPP</button>
       </div>
       <div class="val-table-wrap">
         <table class="val-table">
@@ -3508,6 +3515,7 @@
 
   /* ── Coluna Netcool por nome e posição-fallback ── */
   var NC_COLS = [
+    { key:'firstOcc',   name:'First Occurrence', altNames:['FirstOccurrence'], fallback:1 },
     { key:'neId',       name:'NEName',         fallback:3  },
     { key:'endId',      name:'ictAddressID',   fallback:6  },
     { key:'summary',    name:'Summary',        fallback:7  },
@@ -3740,15 +3748,18 @@
     /* Todos os alarmes do NE estão limpos → NORMALIZADO */
     if(!activeRows.length) return 'NORMALIZADO';
 
-    /* 1. ALARME PRESO — linhas ativas */
+    /* 1. ALARME PRESO — apenas "alarme preso" genuíno ou "escalad"; suprimido por sintético/
+          correlacionado/tempo de reporte NÃO é alarme preso */
     for(var i=0; i<activeRows.length; i++){
       var supr = (activeRows[i].suprEsc||'').toLowerCase();
-      if(supr && (supr.indexOf('suprimid') >= 0 || supr.indexOf('alarme preso') >= 0 || supr === 'escalad')){
+      if(supr && (supr.indexOf('alarme preso') >= 0 || supr.indexOf('escalad') >= 0)){
         return 'ALARME PRESO';
       }
     }
-    /* 2. INTERMITENTE — Tally > 15 E última ocorrência < 2h (linhas ativas) */
+    /* 2. INTERMITENTE — Tally > 15 E última ocorrência < 2h, apenas linhas não-suprimidas */
     for(var i=0; i<activeRows.length; i++){
+      var suprI = (activeRows[i].suprEsc||'').toLowerCase();
+      if(suprI.indexOf('suprimid') >= 0) continue;
       var tally = parseInt(activeRows[i].tally, 10);
       if(!isNaN(tally) && tally > 15){
         var lastOcc = parseNetcoolDate(activeRows[i].lastOcc);
@@ -3839,6 +3850,28 @@
     return hasAvailPreso;
   }
 
+  /* ── Verifica ALARME ANTIGO: first occurrence > 7 dias, alarme ainda ativo, fora de incidente ── */
+  function checkAlarmeAntigo(item, ncRows, ST_G){
+    var t = item.task;
+    var c = item.contract;
+    var incs = ((ST_G||{})[c.id]||{}).incs || [];
+    var siteUp = (t.siteId||'').trim().toUpperCase();
+    var siteForaAtivo = incs.some(function(i){
+      if((i.statusTrat||'ATIVO').toUpperCase() === 'RESOLVIDO') return false;
+      return (i.enderecoId||'').toString().trim().toUpperCase() === siteUp;
+    });
+    if(siteForaAtivo) return false;
+    var activeRows = ncRows.filter(function(r){
+      return (r.gravidade||'').toLowerCase().trim() !== 'limpar';
+    });
+    if(!activeRows.length) return false;
+    var cutoff = Date.now() - 7 * 86400000;
+    return activeRows.some(function(r){
+      var d = parseNetcoolDate(r.firstOcc);
+      return d && d.getTime() < cutoff;
+    });
+  }
+
   /* ── Escaping HTML ── */
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -3856,7 +3889,7 @@
 
   /* ── Badge de resultado ── */
   function resBadge(r){
-    var cls = r==='NORMALIZADO'?'norm': r==='ALARMADO'?'alarm': r==='ALARME PRESO'?'preso': r==='VERIFICAR ALARME PRESO'?'verif': r==='INTERMITENTE'?'inter':'ativo';
+    var cls = r==='NORMALIZADO'?'norm': r==='ALARMADO'?'alarm': r==='ALARME PRESO'?'preso': r==='VERIFICAR ALARME PRESO'?'verif': r==='ALARME ANTIGO'?'antigo': r==='INTERMITENTE'?'inter':'ativo';
     return '<span class="val-res val-res-'+cls+'">'+esc(r)+'</span>';
   }
 
@@ -3966,6 +3999,10 @@
       if(resultado !== 'ALARME PRESO' && checkVerificarAlarmePreso(item, ncRows, ST_G)){
         resultado = 'VERIFICAR ALARME PRESO';
       }
+      /* Override: ALARME ANTIGO (first occurrence > 7 dias, ainda ativo, fora de incidente) */
+      if(resultado === 'ATIVO' || resultado === 'INTERMITENTE'){
+        if(checkAlarmeAntigo(item, ncRows, ST_G)) resultado = 'ALARME ANTIGO';
+      }
       /* Linha de melhor match para exibição */
       var bestRow = null;
       if(ncRows.length){
@@ -3978,11 +4015,11 @@
       }
       return { row: bestRow, resultado: resultado, tsk: item, keywords: allKw, autoKw: autoKw, ncRows: ncRows };
     });
-    /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → VERIFICAR ALARME PRESO → INTERMITENTE → ATIVO */
-    var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'VERIFICAR ALARME PRESO':4, 'INTERMITENTE':5, 'ATIVO':6 };
+    /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → VERIFICAR ALARME PRESO → ALARME ANTIGO → INTERMITENTE → ATIVO */
+    var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'VERIFICAR ALARME PRESO':4, 'ALARME ANTIGO':5, 'INTERMITENTE':6, 'ATIVO':7 };
     _valRows.sort(function(a,b){ return (ORD[a.resultado]||9)-(ORD[b.resultado]||9); });
     /* Contagens */
-    var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, 'VERIFICAR ALARME PRESO':0, INTERMITENTE:0, ATIVO:0 };
+    var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, 'VERIFICAR ALARME PRESO':0, 'ALARME ANTIGO':0, INTERMITENTE:0, ATIVO:0 };
     _valRows.forEach(function(r){ if(counts[r.resultado]!==undefined) counts[r.resultado]++; });
     /* Summary */
     var contratoLabel = (!_valContractId || _valContractId === 'todos') ? 'TODOS' : _valContractId.toUpperCase();
@@ -3992,6 +4029,8 @@
     sumHtml += '<div class="val-badge val-badge-preso">'+counts['ALARME PRESO']+' ALARME PRESO</div>';
     if(counts['VERIFICAR ALARME PRESO'] > 0)
       sumHtml += '<div class="val-badge val-badge-verif">'+counts['VERIFICAR ALARME PRESO']+' VERIFICAR ALARME PRESO</div>';
+    if(counts['ALARME ANTIGO'] > 0)
+      sumHtml += '<div class="val-badge val-badge-antigo">'+counts['ALARME ANTIGO']+' ALARME ANTIGO</div>';
     sumHtml += '<div class="val-badge val-badge-inter">'+counts.INTERMITENTE+' INTERMITENTE</div>';
     sumHtml += '<div class="val-badge val-badge-ativo">'+counts.ATIVO+' ATIVO</div>';
     document.getElementById('val-summary').innerHTML = sumHtml;
@@ -4008,6 +4047,72 @@
     document.querySelectorAll('.val-filter-btn').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
     renderTabela(btn.getAttribute('data-f'));
+  };
+
+  /* ── Copiar para WhatsApp ── */
+  window.valCopiarWA = function(){
+    if(!_valRows.length) return;
+    var activeBtn = document.querySelector('.val-filter-btn.active');
+    var filtro = activeBtn ? activeBtn.getAttribute('data-f') : 'todos';
+    var rows;
+    if(filtro === 'todos'){
+      rows = _valRows;
+    } else if(filtro === 'gravidade'){
+      rows = _valRows.filter(function(r){
+        if(!r.ncRows || !r.ncRows.length) return true;
+        return r.ncRows.every(function(ncr){ return (ncr.gravidade||'').toLowerCase().trim() === 'limpar'; });
+      });
+    } else {
+      rows = _valRows.filter(function(r){ return r.resultado === filtro; });
+    }
+    if(!rows.length){ alert('Nenhuma TSK para copiar com o filtro atual.'); return; }
+    var contratoLabel = (!_valContractId || _valContractId === 'todos') ? 'TODOS' : _valContractId.toUpperCase();
+    var filtroLabel = filtro === 'todos' ? 'TODOS' : filtro === 'gravidade' ? 'GRAVIDADE (sem alarme ativo)' : filtro;
+    var now = new Date();
+    var dtStr = ('0'+now.getDate()).slice(-2)+'/'+('0'+(now.getMonth()+1)).slice(-2)+'/'+now.getFullYear()+' '+('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
+    var lines = [];
+    lines.push('*VALIDACAO NETCOOL — ' + contratoLabel + '*');
+    lines.push('Filtro: ' + filtroLabel + ' | ' + rows.length + ' TSKs | ' + dtStr);
+    lines.push('');
+    rows.forEach(function(r, idx){
+      var t = r.tsk.task;
+      var tskNum = (t.tsk||t.id||'').toString().replace(/^0+/,'');
+      var siteId = (t.siteId||'').trim();
+      var resultado = r.resultado;
+      lines.push((idx+1) + '. *' + tskNum + '* | Site: ' + siteId + ' | *' + resultado + '*');
+      if(r.row){
+        var sumLine = '   Alarme: ' + (r.row.summary||'—');
+        var grav = (r.row.gravidade||'').trim();
+        if(grav && grav.toLowerCase() !== 'limpar') sumLine += ' | Gravidade: ' + grav;
+        var tally = parseInt(r.row.tally, 10);
+        if(!isNaN(tally) && tally > 0) sumLine += ' | Tally: ' + tally;
+        lines.push(sumLine);
+      }
+      if(r.keywords && r.keywords.length){
+        var kws = r.keywords.slice(0, 4).join(', ');
+        lines.push('   Keywords: ' + kws);
+      }
+    });
+    var text = lines.join('\n');
+    var btn = document.getElementById('val-copy-wa');
+    try {
+      navigator.clipboard.writeText(text).then(function(){
+        btn.textContent = 'COPIADO!';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = 'COPIAR PARA WHATSAPP'; btn.classList.remove('copied'); }, 2000);
+      });
+    } catch(e) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch(e2){}
+      document.body.removeChild(ta);
+      btn.textContent = 'COPIADO!';
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.textContent = 'COPIAR PARA WHATSAPP'; btn.classList.remove('copied'); }, 2000);
+    }
   };
 
   /* ── Regras criadoras excluídas ── */
