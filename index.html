@@ -4070,7 +4070,7 @@
     rows.forEach(function(r){
       var t = r.tsk.task;
       var contrato = (r.tsk.contract.id||'').toUpperCase();
-      var tskNum = (t.tsk||t.id||'').toString();
+      var tskNum = (t.osNumero||t.tskId||'').toString();
       lines.push(contrato + ' - ' + tskNum);
     });
     var text = lines.join('\n');
