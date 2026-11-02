@@ -357,6 +357,9 @@
     .val-copy-wa-btn { margin-left:auto; padding:5px 14px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:1px; cursor:pointer; border:1px solid rgba(37,211,102,.4); background:rgba(37,211,102,.1); color:#25d366; transition:background .2s; }
     .val-copy-wa-btn:hover { background:rgba(37,211,102,.2); }
     .val-copy-wa-btn.copied { background:rgba(37,211,102,.25); color:#1ebe5d; }
+    .val-copy-ne-btn { margin-left:6px; padding:5px 14px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:1px; cursor:pointer; border:1px solid rgba(52,152,219,.4); background:rgba(52,152,219,.1); color:#5dade2; transition:background .2s; }
+    .val-copy-ne-btn:hover { background:rgba(52,152,219,.2); }
+    .val-copy-ne-btn.copied { background:rgba(52,152,219,.25); color:#3498db; }
     .val-filter-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
     .val-filter-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin-right:4px; }
     .val-filter-btn { background:rgba(255,255,255,.05); border:1px solid var(--border2); border-radius:6px; padding:4px 12px; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); cursor:pointer; }
@@ -655,6 +658,7 @@
         <button class="val-filter-btn" data-f="ALARME ANTIGO" onclick="valFiltrar(this)">ALARME ANTIGO</button>
         <button class="val-filter-btn" data-f="gravidade" onclick="valFiltrar(this)">GRAVIDADE</button>
         <button class="val-copy-wa-btn" id="val-copy-wa" onclick="valCopiarWA()" title="Copiar lista para WhatsApp">COPIAR PARA WHATSAPP</button>
+        <button class="val-copy-ne-btn" id="val-copy-ne" onclick="valCopiarNeId()" title="Copiar NE IDs para filtro Netcool">COPIAR NE ID</button>
       </div>
       <div class="val-table-wrap">
         <table class="val-table">
@@ -3885,7 +3889,15 @@
       var d = parseNetcoolDate(r.lastOcc);
       return d && d >= yesterdayStart;
     });
-    return hasAvailPreso;
+    if(hasAvailPreso) return true;
+
+    /* Regra geral: qualquer alarme ativo com última ocorrência > 48h (alarme congelado/preso).
+       Cobre BD_STATUS antigo, NE is disconnected antigo, RF UNIT antigo, etc. */
+    var cutoff48h = new Date(now.getTime() - 48 * 3600 * 1000);
+    return activeRows.every(function(r){
+      var d = parseNetcoolDate(r.lastOcc);
+      return d && d < cutoff48h;
+    });
   }
 
   /* ── Verifica ALARME ANTIGO: first occurrence > 7 dias, alarme ainda ativo, fora de incidente ── */
@@ -4130,6 +4142,45 @@
       btn.textContent = 'COPIADO!';
       btn.classList.add('copied');
       setTimeout(function(){ btn.textContent = 'COPIAR PARA WHATSAPP'; btn.classList.remove('copied'); }, 2000);
+    }
+  };
+
+  /* ── Copiar NE IDs para filtro Netcool ── */
+  window.valCopiarNeId = function(){
+    if(!_valRows.length) return;
+    var activeBtn = document.querySelector('.val-filter-btn.active');
+    var filtro = activeBtn ? activeBtn.getAttribute('data-f') : 'todos';
+    var rows;
+    if(filtro === 'todos'){
+      rows = _valRows;
+    } else if(filtro === 'gravidade'){
+      rows = _valRows.filter(function(r){
+        if(!r.ncRows || !r.ncRows.length) return true;
+        return r.ncRows.every(function(ncr){ return (ncr.gravidade||'').toLowerCase().trim() === 'limpar'; });
+      });
+    } else {
+      rows = _valRows.filter(function(r){ return r.resultado === filtro; });
+    }
+    if(!rows.length){ alert('Nenhuma TSK para copiar com o filtro atual.'); return; }
+    /* Coleta NE IDs únicos (siteId da TSK = NEName do Netcool) */
+    var seen = {};
+    var neIds = [];
+    rows.forEach(function(r){
+      var ne = (r.tsk.task.siteId||'').trim();
+      if(ne && !seen[ne]){ seen[ne] = true; neIds.push(ne); }
+    });
+    var text = neIds.map(function(ne){ return ';\t' + ne; }).join('\n');
+    var btn = document.getElementById('val-copy-ne');
+    function feedback(){ btn.textContent='COPIADO!'; btn.classList.add('copied'); setTimeout(function(){ btn.textContent='COPIAR NE ID'; btn.classList.remove('copied'); },2000); }
+    try {
+      navigator.clipboard.writeText(text).then(feedback);
+    } catch(e) {
+      var ta=document.createElement('textarea'); ta.value=text;
+      ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); }catch(e2){}
+      document.body.removeChild(ta);
+      feedback();
     }
   };
 
