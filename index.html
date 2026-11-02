@@ -351,6 +351,7 @@
     .val-badge-preso { background:rgba(245,177,17,.12); color:#f39c12; border:1px solid rgba(245,177,17,.3); }
     .val-badge-ativo { background:rgba(255,255,255,.07); color:var(--muted); border:1px solid var(--border2); }
     .val-badge-inter { background:rgba(155,89,182,.12); color:#bb8fce; border:1px solid rgba(155,89,182,.3); }
+    .val-badge-verif { background:rgba(255,165,0,.12); color:#ffa500; border:1px solid rgba(255,165,0,.3); }
     .val-filter-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
     .val-filter-label { font-size:10px; font-weight:700; letter-spacing:1.5px; color:var(--muted); margin-right:4px; }
     .val-filter-btn { background:rgba(255,255,255,.05); border:1px solid var(--border2); border-radius:6px; padding:4px 12px; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--muted); cursor:pointer; }
@@ -367,6 +368,7 @@
     .val-res-preso { background:rgba(245,177,17,.12); color:#f39c12; }
     .val-res-ativo { background:rgba(255,255,255,.07); color:var(--muted); }
     .val-res-inter { background:rgba(155,89,182,.12); color:#bb8fce; }
+    .val-res-verif { background:rgba(255,165,0,.12); color:#ffa500; }
     .val-addinfo { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); cursor:pointer; }
     .val-addinfo:hover { white-space:normal; overflow:visible; }
     .val-highlight { background:rgba(243,156,18,.25); border-radius:2px; padding:0 2px; }
@@ -644,6 +646,8 @@
         <button class="val-filter-btn" data-f="ALARME PRESO" onclick="valFiltrar(this)">ALARME PRESO</button>
         <button class="val-filter-btn" data-f="ATIVO" onclick="valFiltrar(this)">ATIVO</button>
         <button class="val-filter-btn" data-f="INTERMITENTE" onclick="valFiltrar(this)">INTERMITENTE</button>
+        <button class="val-filter-btn" data-f="VERIFICAR ALARME PRESO" onclick="valFiltrar(this)">VERIFICAR ALARME PRESO</button>
+        <button class="val-filter-btn" data-f="gravidade" onclick="valFiltrar(this)">GRAVIDADE</button>
       </div>
       <div class="val-table-wrap">
         <table class="val-table">
@@ -3756,13 +3760,83 @@
     /* 3–5. Correlação de keywords (linhas ativas) */
     if(!keywords.length) return 'ATIVO';
     var maxMatched = 0;
+    var hasCriticalMatch = false;
     for(var i=0; i<activeRows.length; i++){
       var s = scoreRow(activeRows[i], keywords);
       if(s > maxMatched) maxMatched = s;
+      /* NE com muitos alarmes dilui o score por row — linha Crítico/Principal com
+         qualquer match já é sinal forte o suficiente para ALARMADO */
+      if(s > 0){
+        /* normalize remove acentos: "Crítico" → "critico" */
+        var grav = (activeRows[i].gravidade||'').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g,'');
+        if(grav.indexOf('critico') >= 0 || grav === 'principal') hasCriticalMatch = true;
+      }
     }
     if(maxMatched === 0) return 'NORMALIZADO';
-    if(maxMatched / keywords.length >= 0.5) return 'ALARMADO';
+    if(maxMatched / keywords.length >= 0.5 || hasCriticalMatch) return 'ALARMADO';
     return 'ATIVO';
+  }
+
+  /* ── Títulos de alarme: energia e disponibilidade ── */
+  function matchesEnergyTitle(summary){
+    var s = (summary||'').toUpperCase();
+    return s.indexOf('FALHA DE RETIFICADOR') >= 0 ||
+           s.indexOf('FALHA DE ENERGIA')     >= 0 ||
+           s.indexOf('FUSIVEL')              >= 0 ||
+           s.indexOf('DISJUNTOR')            >= 0;
+  }
+
+  function matchesAvailTitle(summary){
+    var s = (summary||'').toUpperCase();
+    if(s.indexOf('INDISPONIB') >= 0) return true;
+    if((s.indexOf('GSM') >= 0 || s.indexOf('UMTS') >= 0 || s.indexOf('LTE') >= 0) && s.indexOf('DOWN') >= 0) return true;
+    if(s.indexOf('NR CELL') >= 0 || s.indexOf('NR GNODEB') >= 0) return true;
+    if(s.indexOf('EQUIPAMENTO INAC') >= 0 || s.indexOf('IS DISCONNECTED') >= 0) return true;
+    return false;
+  }
+
+  /* ── Verifica se deve classificar como VERIFICAR ALARME PRESO ──
+     Regras:
+     · Energia  (FALHA DE RETIF / FALHA DE ENERGIA / FUSIVEL / DISJUNTOR):
+       alarme ativo + última ocorrência = ontem + site NÃO em incidente ativo
+     · Disponib. (INDISPONIB / GSM|UMTS|LTE DOWN / NR / EQUIP INAC / DISCONNECTED):
+       alarme ativo + última ocorrência = ontem OU hoje + site NÃO em incidente ativo
+  */
+  function checkVerificarAlarmePreso(item, ncRows, ST_G){
+    var t = item.task;
+    var c = item.contract;
+    var incs = ((ST_G||{})[c.id]||{}).incs || [];
+    var siteUp = (t.siteId||'').trim().toUpperCase();
+
+    var siteForaAtivo = incs.some(function(i){
+      if((i.statusTrat||'ATIVO').toUpperCase() === 'RESOLVIDO') return false;
+      return (i.enderecoId||'').toString().trim().toUpperCase() === siteUp;
+    });
+    if(siteForaAtivo) return false;
+
+    var activeRows = ncRows.filter(function(r){
+      return (r.gravidade||'').toLowerCase().trim() !== 'limpar';
+    });
+    if(!activeRows.length) return false;
+
+    var now = new Date();
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var yesterdayStart = new Date(todayStart.getTime() - 86400000);
+
+    var hasEnergyPreso = activeRows.some(function(r){
+      if(!matchesEnergyTitle(r.summary)) return false;
+      var d = parseNetcoolDate(r.lastOcc);
+      return d && d >= yesterdayStart && d < todayStart;
+    });
+    if(hasEnergyPreso) return true;
+
+    var hasAvailPreso = activeRows.some(function(r){
+      if(!matchesAvailTitle(r.summary)) return false;
+      var d = parseNetcoolDate(r.lastOcc);
+      return d && d >= yesterdayStart;
+    });
+    return hasAvailPreso;
   }
 
   /* ── Escaping HTML ── */
@@ -3782,13 +3856,18 @@
 
   /* ── Badge de resultado ── */
   function resBadge(r){
-    var cls = r==='NORMALIZADO'?'norm': r==='ALARMADO'?'alarm': r==='ALARME PRESO'?'preso': r==='INTERMITENTE'?'inter':'ativo';
+    var cls = r==='NORMALIZADO'?'norm': r==='ALARMADO'?'alarm': r==='ALARME PRESO'?'preso': r==='VERIFICAR ALARME PRESO'?'verif': r==='INTERMITENTE'?'inter':'ativo';
     return '<span class="val-res val-res-'+cls+'">'+esc(r)+'</span>';
   }
 
   /* ── Renderizar tabela (com filtro) ── */
   function renderTabela(filtro){
-    var rows = filtro === 'todos' ? _valRows : _valRows.filter(function(r){ return r.resultado === filtro; });
+    var rows = filtro === 'todos' ? _valRows :
+      filtro === 'gravidade' ? _valRows.filter(function(r){
+        if(!r.ncRows || !r.ncRows.length) return true;
+        return r.ncRows.every(function(ncr){ return (ncr.gravidade||'').toLowerCase().trim() === 'limpar'; });
+      }) :
+      _valRows.filter(function(r){ return r.resultado === filtro; });
     var tbody = document.getElementById('val-tbody');
     if(!tbody) return;
     if(!rows.length){
@@ -3883,6 +3962,10 @@
       var autoKw = extractNotaAberturaKeywords(t.motivoCancelamento);
       var allKw  = autoKw.concat(manualKw);
       var resultado = classificarTsk(ncRows, allKw);
+      /* Override: VERIFICAR ALARME PRESO (energia/disponibilidade antigos fora de incidente) */
+      if(resultado !== 'ALARME PRESO' && checkVerificarAlarmePreso(item, ncRows, ST_G)){
+        resultado = 'VERIFICAR ALARME PRESO';
+      }
       /* Linha de melhor match para exibição */
       var bestRow = null;
       if(ncRows.length){
@@ -3895,11 +3978,11 @@
       }
       return { row: bestRow, resultado: resultado, tsk: item, keywords: allKw, autoKw: autoKw, ncRows: ncRows };
     });
-    /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → INTERMITENTE → ATIVO */
-    var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'INTERMITENTE':4, 'ATIVO':5 };
+    /* Ordenar: NORMALIZADO → ALARMADO → ALARME PRESO → VERIFICAR ALARME PRESO → INTERMITENTE → ATIVO */
+    var ORD = { 'NORMALIZADO':1, 'ALARMADO':2, 'ALARME PRESO':3, 'VERIFICAR ALARME PRESO':4, 'INTERMITENTE':5, 'ATIVO':6 };
     _valRows.sort(function(a,b){ return (ORD[a.resultado]||9)-(ORD[b.resultado]||9); });
     /* Contagens */
-    var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, INTERMITENTE:0, ATIVO:0 };
+    var counts = { NORMALIZADO:0, ALARMADO:0, 'ALARME PRESO':0, 'VERIFICAR ALARME PRESO':0, INTERMITENTE:0, ATIVO:0 };
     _valRows.forEach(function(r){ if(counts[r.resultado]!==undefined) counts[r.resultado]++; });
     /* Summary */
     var contratoLabel = (!_valContractId || _valContractId === 'todos') ? 'TODOS' : _valContractId.toUpperCase();
@@ -3907,6 +3990,8 @@
     sumHtml += '<div class="val-badge val-badge-norm">'+counts.NORMALIZADO+' NORMALIZADO</div>';
     sumHtml += '<div class="val-badge val-badge-alarm">'+counts.ALARMADO+' ALARMADO</div>';
     sumHtml += '<div class="val-badge val-badge-preso">'+counts['ALARME PRESO']+' ALARME PRESO</div>';
+    if(counts['VERIFICAR ALARME PRESO'] > 0)
+      sumHtml += '<div class="val-badge val-badge-verif">'+counts['VERIFICAR ALARME PRESO']+' VERIFICAR ALARME PRESO</div>';
     sumHtml += '<div class="val-badge val-badge-inter">'+counts.INTERMITENTE+' INTERMITENTE</div>';
     sumHtml += '<div class="val-badge val-badge-ativo">'+counts.ATIVO+' ATIVO</div>';
     document.getElementById('val-summary').innerHTML = sumHtml;
