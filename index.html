@@ -3524,6 +3524,7 @@
     { key:'tally',      name:'Tally',          fallback:20 },
     { key:'suprEsc',    name:'SuprEsc',        fallback:21 },
     { key:'lastOcc',    name:'LastOccurrence', altNames:['Última Ocorrência','Last Occurrence','UltimaOcorrencia'], fallback:23 },
+    { key:'clearTime',  name:'ictClearTime',   fallback:24 },
     { key:'node',       name:'Node',           fallback:25 },
     { key:'alarmedRes', name:'AlarmedResource',fallback:26 }
   ];
@@ -3638,7 +3639,7 @@
 
   /* ── Parse de data Netcool (DD/MM/YY ou DD/MM/YYYY HH:MM:SS) ── */
   function parseNetcoolDate(str){
-    if(!str) return null;
+    if(!str || str.trim() === '0') return null;
     var m = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})\s+(\d{2}):(\d{2}):(\d{2})/);
     if(m){
       var yr = +m[3];
@@ -3724,6 +3725,7 @@
   function scoreRow(row, keywords){
     if(!keywords.length) return 0;
     var combined = [
+      (row.summary||'').toLowerCase(),
       (row.addInfo||'').toLowerCase(),
       (row.node||'').toLowerCase(),
       (row.alarmedRes||'').toLowerCase()
@@ -3736,56 +3738,92 @@
     return matched;
   }
 
+  /* Correlações causais conhecidas entre alarme Netcool e sintoma reportado na TSK */
+  function checkCausalCorrelation(ncRows, keywords){
+    if(!keywords.length) return null;
+    var kwStr = keywords.join(' ').toLowerCase();
+    var availKw = kwStr.indexOf('disponib') >= 0 || kwStr.indexOf('cell') >= 0 ||
+                  kwStr.indexOf('partial') >= 0 || kwStr.indexOf('parcial') >= 0 ||
+                  kwStr.indexOf('setor') >= 0 || kwStr.indexOf('down') >= 0 ||
+                  kwStr.indexOf('indisponib') >= 0;
+
+    /* BASE STATION CONNECTIVITY (ativo, Tally >= 2) + TSK de disponibilidade/cell/partial */
+    if(availKw){
+      var hasBSC = ncRows.some(function(r){
+        if((r.gravidade||'').toLowerCase().trim() === 'limpar') return false;
+        return (r.summary||'').toUpperCase().indexOf('BASE STATION CONNECTIVITY') >= 0
+          && parseInt(r.tally||0, 10) >= 2;
+      });
+      if(hasBSC) return 'ALARMADO';
+    }
+
+    /* RF UNIT PROBLEM (ativo) + TSK de disponibilidade/cell/partial */
+    if(availKw){
+      var hasRFUnit = ncRows.some(function(r){
+        if((r.gravidade||'').toLowerCase().trim() === 'limpar') return false;
+        return (r.summary||'').toUpperCase().indexOf('RF UNIT PROBLEM') >= 0;
+      });
+      if(hasRFUnit) return 'ALARMADO';
+    }
+
+    return null;
+  }
+
   /* Classifica uma TSK com base em TODAS as linhas Netcool do seu NE */
   function classificarTsk(ncRows, keywords){
     if(!ncRows.length) return 'NORMALIZADO';
 
-    /* Separa alarmes ativos (Gravidade != "Limpar") dos limpos */
     var activeRows = ncRows.filter(function(r){
       return (r.gravidade||'').toLowerCase().trim() !== 'limpar';
     });
 
-    /* Todos os alarmes do NE estão limpos → NORMALIZADO */
-    if(!activeRows.length) return 'NORMALIZADO';
-
-    /* 1. ALARME PRESO — apenas "alarme preso" genuíno ou "escalad"; suprimido por sintético/
-          correlacionado/tempo de reporte NÃO é alarme preso */
+    /* 1. ALARME PRESO — apenas "alarme preso" genuíno ou "escalad" */
     for(var i=0; i<activeRows.length; i++){
       var supr = (activeRows[i].suprEsc||'').toLowerCase();
       if(supr && (supr.indexOf('alarme preso') >= 0 || supr.indexOf('escalad') >= 0)){
         return 'ALARME PRESO';
       }
     }
-    /* 2. INTERMITENTE — Tally > 15 E última ocorrência < 2h, apenas linhas não-suprimidas */
-    for(var i=0; i<activeRows.length; i++){
-      var suprI = (activeRows[i].suprEsc||'').toLowerCase();
-      if(suprI.indexOf('suprimid') >= 0) continue;
-      var tally = parseInt(activeRows[i].tally, 10);
-      if(!isNaN(tally) && tally > 15){
-        var lastOcc = parseNetcoolDate(activeRows[i].lastOcc);
-        if(lastOcc && (Date.now() - lastOcc.getTime()) < 2 * 60 * 60 * 1000){
+
+    /* 2. Correlação causal (RF UNIT PROBLEM, BASE STATION CONNECTIVITY) */
+    var causal = checkCausalCorrelation(ncRows, keywords);
+    if(causal === 'ALARMADO') return 'ALARMADO';
+
+    /* 3. Correlação de keywords em linhas ativas */
+    var maxMatched = 0, hasCriticalMatch = false;
+    if(keywords.length && activeRows.length){
+      for(var i=0; i<activeRows.length; i++){
+        var s = scoreRow(activeRows[i], keywords);
+        if(s > maxMatched) maxMatched = s;
+        if(s > 0){
+          var grav = (activeRows[i].gravidade||'').toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g,'');
+          if(grav.indexOf('critico') >= 0 || grav === 'principal') hasCriticalMatch = true;
+        }
+      }
+      if(maxMatched > 0 && (maxMatched / keywords.length >= 0.5 || hasCriticalMatch)){
+        return 'ALARMADO';
+      }
+    }
+
+    /* 4. INTERMITENTE — qualquer linha (ativa OU limpa) com Tally >= 4 e ocorrência recente */
+    var now = Date.now();
+    for(var i=0; i<ncRows.length; i++){
+      var row = ncRows[i];
+      var tally = parseInt(row.tally, 10);
+      if(!isNaN(tally) && tally >= 4){
+        var lastOcc = parseNetcoolDate(row.lastOcc);
+        var clearTm = parseNetcoolDate(row.clearTime);
+        if((lastOcc && (now - lastOcc.getTime()) < 24 * 3600 * 1000) ||
+           (clearTm && (now - clearTm.getTime()) <  4 * 3600 * 1000)){
           return 'INTERMITENTE';
         }
       }
     }
-    /* 3–5. Correlação de keywords (linhas ativas) */
-    if(!keywords.length) return 'ATIVO';
-    var maxMatched = 0;
-    var hasCriticalMatch = false;
-    for(var i=0; i<activeRows.length; i++){
-      var s = scoreRow(activeRows[i], keywords);
-      if(s > maxMatched) maxMatched = s;
-      /* NE com muitos alarmes dilui o score por row — linha Crítico/Principal com
-         qualquer match já é sinal forte o suficiente para ALARMADO */
-      if(s > 0){
-        /* normalize remove acentos: "Crítico" → "critico" */
-        var grav = (activeRows[i].gravidade||'').toLowerCase()
-          .normalize('NFD').replace(/[̀-ͯ]/g,'');
-        if(grav.indexOf('critico') >= 0 || grav === 'principal') hasCriticalMatch = true;
-      }
-    }
-    if(maxMatched === 0) return 'NORMALIZADO';
-    if(maxMatched / keywords.length >= 0.5 || hasCriticalMatch) return 'ALARMADO';
+
+    /* 5. Sem alarmes ativos → NORMALIZADO; com ativos sem match → ATIVO ou NORMALIZADO */
+    if(!activeRows.length) return 'NORMALIZADO';
+    if(!keywords.length || maxMatched === 0) return 'NORMALIZADO';
     return 'ATIVO';
   }
 
