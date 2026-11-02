@@ -4066,32 +4066,12 @@
       rows = _valRows.filter(function(r){ return r.resultado === filtro; });
     }
     if(!rows.length){ alert('Nenhuma TSK para copiar com o filtro atual.'); return; }
-    var contratoLabel = (!_valContractId || _valContractId === 'todos') ? 'TODOS' : _valContractId.toUpperCase();
-    var filtroLabel = filtro === 'todos' ? 'TODOS' : filtro === 'gravidade' ? 'GRAVIDADE (sem alarme ativo)' : filtro;
-    var now = new Date();
-    var dtStr = ('0'+now.getDate()).slice(-2)+'/'+('0'+(now.getMonth()+1)).slice(-2)+'/'+now.getFullYear()+' '+('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
     var lines = [];
-    lines.push('*VALIDACAO NETCOOL — ' + contratoLabel + '*');
-    lines.push('Filtro: ' + filtroLabel + ' | ' + rows.length + ' TSKs | ' + dtStr);
-    lines.push('');
-    rows.forEach(function(r, idx){
+    rows.forEach(function(r){
       var t = r.tsk.task;
-      var tskNum = (t.tsk||t.id||'').toString().replace(/^0+/,'');
-      var siteId = (t.siteId||'').trim();
-      var resultado = r.resultado;
-      lines.push((idx+1) + '. *' + tskNum + '* | Site: ' + siteId + ' | *' + resultado + '*');
-      if(r.row){
-        var sumLine = '   Alarme: ' + (r.row.summary||'—');
-        var grav = (r.row.gravidade||'').trim();
-        if(grav && grav.toLowerCase() !== 'limpar') sumLine += ' | Gravidade: ' + grav;
-        var tally = parseInt(r.row.tally, 10);
-        if(!isNaN(tally) && tally > 0) sumLine += ' | Tally: ' + tally;
-        lines.push(sumLine);
-      }
-      if(r.keywords && r.keywords.length){
-        var kws = r.keywords.slice(0, 4).join(', ');
-        lines.push('   Keywords: ' + kws);
-      }
+      var contrato = (r.tsk.contract.id||'').toUpperCase();
+      var tskNum = (t.tsk||t.id||'').toString();
+      lines.push(contrato + ' - ' + tskNum);
     });
     var text = lines.join('\n');
     var btn = document.getElementById('val-copy-wa');
