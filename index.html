@@ -3707,13 +3707,17 @@
       if(bp.length > 3) add(bp);
     }
 
-    /* 7. FALHA: TEXT */
-    var reFalha = /\bFALHA:\s*([^\n,;|@]+?)(?=\s{2,}|\s*(?:FACILIDADE:|Facilidade:|Summary|NE:|Node:|NEName:|AdditionalInfo:|AlarmedResource:)|\s*$)/gi;
+    /* 7. FALHA: TEXT — termina em \n, ` / `, duplo espaço ou label conhecido */
+    var reFalha = /\bFALHA:\s*([^\n,;|@]+?)(?=[\n\r]|\s{2,}|\s+\/\s+|\s*(?:FACILIDADE:|Facilidade:|Summary|NE:|Node:|NEName:|AdditionalInfo:|AlarmedResource:)|\s*$)/gi;
     while((m = reFalha.exec(nota)) !== null) add(m[1]);
 
-    /* 8. FACILIDADE: TEXT */
-    var reFacil = /\bFACILIDADE:\s*([^\n,;|@]+?)(?=\s{2,}|\s*(?:FALHA:|Falha:|Summary|NE:|Node:|NEName:|AdditionalInfo:|AlarmedResource:)|\s*$)/gi;
+    /* 8. FACILIDADE: TEXT — termina em \n, ` / `, duplo espaço ou label conhecido */
+    var reFacil = /\bFACILIDADE:\s*([^\n,;|@]+?)(?=[\n\r]|\s{2,}|\s+\/\s+|\s*(?:FALHA:|Falha:|Summary|NE:|Node:|NEName:|AdditionalInfo:|AlarmedResource:)|\s*$)/gi;
     while((m = reFacil.exec(nota)) !== null) add(m[1]);
+
+    /* 9. Description: TIPO|VIZINHO|... — extrai NE vizinho de notas de enlace/Interface Down */
+    var reDesc = /\bDescription:\s*([^|\n]+?)\|([^|\n]+?)(?=\|)/gi;
+    while((m = reDesc.exec(nota)) !== null){ if(m[2]) add(m[2]); }
 
     return Object.keys(kws).filter(function(k){ return k.length > 3; });
   }
